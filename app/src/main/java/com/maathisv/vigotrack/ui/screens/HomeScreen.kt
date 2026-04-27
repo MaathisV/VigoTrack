@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -15,6 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.maathisv.vigotrack.models.ActivitySession
+import com.maathisv.vigotrack.models.ConnectionState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -25,6 +27,10 @@ fun HomeScreen(viewModel: HomeViewModel) {
     var newActivityName by remember { mutableStateOf("") }
 
     // Scaffold provides the standard top bar and background
+    val connectionState by viewModel.connectionState.collectAsState()
+    val scannedDevices by viewModel.scannedDevices.collectAsState()
+    var showConnectionDialog by remember { mutableStateOf(false) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -32,7 +38,25 @@ fun HomeScreen(viewModel: HomeViewModel) {
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                )
+                ),
+                actions = {
+                    // Dynamic button based on state
+                    when (connectionState) {
+                        ConnectionState.CONNECTED -> {
+                            Button(onClick = { viewModel.disconnectFromDevice("YOUR_DEVICE_ID") }) {
+                                Text("Disconnect")
+                            }
+                        }
+                        ConnectionState.CONNECTING -> {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                        }
+                        ConnectionState.NOT_CONNECTED -> {
+                            IconButton(onClick = { showConnectionDialog = true }) {
+                                Icon(Icons.Default.Settings, contentDescription = "Connect")
+                            }
+                        }
+                    }
+                }
             )
         }
     ) { paddingValues ->
@@ -84,6 +108,17 @@ fun HomeScreen(viewModel: HomeViewModel) {
                 TextButton(onClick = { showDialog = false }) {
                     Text("Cancel")
                 }
+            }
+        )
+    }
+
+    if (showConnectionDialog) {
+        ConnectionDialog(
+            scannedDevices = scannedDevices,
+            onDismiss = { showConnectionDialog = false },
+            onDeviceSelected = { deviceId ->
+                viewModel.connectToDevice(deviceId)
+                showConnectionDialog = false
             }
         )
     }
