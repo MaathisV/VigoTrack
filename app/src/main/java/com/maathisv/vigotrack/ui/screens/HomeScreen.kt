@@ -1,10 +1,15 @@
 package com.maathisv.vigotrack.ui.screens
 
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -23,10 +28,31 @@ fun HomeScreen(viewModel: HomeViewModel) {
     var showDialog by remember { mutableStateOf(false) }
     var newActivityName by remember { mutableStateOf("") }
 
-    // Scaffold provides the standard top bar and background
     val connectionState by viewModel.connectionState.collectAsState()
     val scannedDevices by viewModel.scannedDevices.collectAsState()
+    val connectedDevicesList by viewModel.connectedDevicesList.collectAsState() // Get the list
+    val connectingId by viewModel.isConnectingToId.collectAsState()
     var showConnectionDialog by remember { mutableStateOf(false) }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        // If the user says "Allow", we start the scan immediately
+        val isGranted = permissions.values.all { it }
+        if (isGranted) {
+            viewModel.startScanning()
+            showConnectionDialog = true
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        permissionLauncher.launch(
+            arrayOf(
+                Manifest.permission.BLUETOOTH_SCAN,
+                Manifest.permission.BLUETOOTH_CONNECT
+            )
+        )
+    }
+
 
     Scaffold(
         topBar = {
@@ -37,21 +63,12 @@ fun HomeScreen(viewModel: HomeViewModel) {
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 ),
                 actions = {
-                    // Dynamic button based on state
-                    when (connectionState) {
-                        ConnectionState.CONNECTED -> {
-                            Button(onClick = { viewModel.disconnectFromDevice("YOUR_DEVICE_ID") }) {
-                                Text("Disconnect")
-                            }
-                        }
-                        ConnectionState.CONNECTING -> {
-                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                        }
-                        ConnectionState.NOT_CONNECTED -> {
-                            IconButton(onClick = { showConnectionDialog = true }) {
-                                Icon(Icons.Default.Settings, contentDescription = "Connect")
-                            }
-                        }
+                    // This is your static icon button
+                    IconButton(onClick = { showConnectionDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Phone,
+                            contentDescription = "Device Management"
+                        )
                     }
                 }
             )
@@ -112,11 +129,10 @@ fun HomeScreen(viewModel: HomeViewModel) {
     if (showConnectionDialog) {
         ConnectionDialog(
             scannedDevices = scannedDevices,
+            connectedDevicesList = connectedDevicesList, // Pass it here
+            connectingId = connectingId,
             onDismiss = { showConnectionDialog = false },
-            onDeviceSelected = { deviceId ->
-                viewModel.connectToDevice(deviceId)
-                showConnectionDialog = false
-            }
-        )
-    }
+            onConnect = { id -> viewModel.connectToDevice(id) },
+            onDisconnect = { id -> viewModel.disconnectFromDevice(id) }
+        )}
 }
