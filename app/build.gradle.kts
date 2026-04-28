@@ -1,21 +1,21 @@
-// TODO : Link Gradle with libs.versions.toml
-
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.ksp)
+    alias(libs.plugins.kotlin.android)
+}
+
+kotlin {
+    jvmToolchain(17)
 }
 
 android {
     namespace = "com.maathisv.vigotrack"
-    compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
-        }
-    }
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.maathisv.vigotrack"
-        minSdk = 36
+        minSdk = 33
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
@@ -33,34 +33,44 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
-    }
-    buildFeatures {
-        compose = true
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 }
 
 dependencies {
+    // Core & Lifecycle
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.service)
     implementation(libs.androidx.activity.compose)
+
+    // Compose UI - Using the Bundle from TOML
     implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.compose.ui)
-    implementation(libs.androidx.compose.ui.graphics)
-    implementation(libs.androidx.compose.ui.tooling.preview)
-    implementation(libs.androidx.compose.material3)
-    implementation(libs.androidx.ui)
+    implementation(libs.bundles.compose.ui)
+
+    // Polar SDK & Coroutine Integration
+    implementation(libs.polar.sdk)
+    implementation(libs.rxandroid)
+    implementation(libs.rxjava)
+    implementation(libs.kotlinx.coroutines.rx3)
+
+    // Room Database - Using the Bundle from TOML
+    implementation(libs.bundles.room)
+    ksp(libs.androidx.room.compiler) // KSP must stay separate from bundles
+
+    // Unit Testing
     testImplementation(libs.junit)
+    testImplementation(libs.androidx.room.testing)
+
+    // Instrumented Testing
+    androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+
+    // Debug Tools
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
-
-    implementation("com.github.polarofficial:polar-ble-sdk:7.1.0")
-    implementation("androidx.compose.ui:ui")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.6.2")
-    implementation(libs.kotlinx.coroutines.rx3)
 }
