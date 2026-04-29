@@ -15,6 +15,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
 
 
 class SensorRepository(
@@ -49,6 +50,13 @@ class SensorRepository(
 
     init {
         setupPolarCallbacks()
+
+        repositoryScope.launch {
+            dataSource.getSavedSensors().first().forEach { savedSensor ->
+                Log.d(TAG, "Auto-connecting to saved device: ${savedSensor.deviceId}")
+                connectByIdentifier(savedSensor.deviceId)
+            }
+        }
     }
 
     private fun setupPolarCallbacks() {
@@ -66,6 +74,16 @@ class SensorRepository(
                 Log.d(TAG, "Connected to ${polarDeviceInfo.deviceId}")
                 _connectedDeviceIds.update { it + polarDeviceInfo.deviceId }
                 _connectionState.value = ConnectionState.CONNECTED
+
+                repositoryScope.launch {
+                    dataSource.saveSensor(
+                        Sensor(
+                            deviceId = polarDeviceInfo.deviceId,
+                            address = polarDeviceInfo.address,
+                            name = polarDeviceInfo.name
+                        )
+                    )
+                }
             }
 
             override fun deviceDisconnected(polarDeviceInfo: PolarDeviceInfo) {
@@ -97,9 +115,6 @@ class SensorRepository(
             }
 
             override fun htsNotificationReceived(identifier: String, data: PolarHealthThermometerData) {}
-
-
-            repositoryScope.lauch()
 
         })
     }
@@ -141,5 +156,21 @@ class SensorRepository(
 
     fun requestDisconnect(deviceId: String) {
         api.disconnectFromDevice(deviceId)
+    }
+
+    fun connectToDevice(sensor: Sensor) {
+        val identifier = sensor.deviceId.ifEmpty { sensor.address }
+        connectByIdentifier(identifier)
+    }
+
+    private fun connectByIdentifier(identifier: String) {
+        Log.d(TAG, "Connecting to: $identifier")
+        _connectionState.value = ConnectionState.CONNECTING
+        try {
+            api.connectToDevice(identifier)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to connect to $identifier", e)
+            _connectionState.value = ConnectionState.NOT_CONNECTED
+        }
     }
 }
