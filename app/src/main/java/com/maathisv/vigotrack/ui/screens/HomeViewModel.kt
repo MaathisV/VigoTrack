@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.maathisv.vigotrack.models.Sensor
 import com.maathisv.vigotrack.repository.ActivityRepository
-import com.maathisv.vigotrack.repository.DeviceRepository
+import com.maathisv.vigotrack.repository.SensorRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -16,7 +16,7 @@ import kotlinx.coroutines.launch
 
 class HomeViewModel(
     private val activityRepo: ActivityRepository,
-    private val deviceRepo: DeviceRepository
+    private val deviceRepo: SensorRepository
 ) : ViewModel() {
 
     val connectionState = deviceRepo.connectionState

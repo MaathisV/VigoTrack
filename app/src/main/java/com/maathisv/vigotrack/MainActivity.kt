@@ -16,7 +16,7 @@ class MainActivity : ComponentActivity() {
 
         val factory = viewModelFactory {
             initializer {
-                HomeViewModel(app.activityRepository, app.deviceRepository)
+                HomeViewModel(app.activityRepository, app.sensorRepository)
             }
         }
 

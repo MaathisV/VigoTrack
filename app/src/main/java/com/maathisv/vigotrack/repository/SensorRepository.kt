@@ -2,6 +2,7 @@ package com.maathisv.vigotrack.repository
 
 import android.content.Context
 import android.util.Log
+import com.maathisv.vigotrack.data.SensorDataSource
 import com.maathisv.vigotrack.models.ConnectionState
 import com.maathisv.vigotrack.models.Sensor
 import com.polar.androidcommunications.api.ble.model.DisInfo
@@ -16,7 +17,10 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.*
 
 
-class DeviceRepository(private val context: Context) {
+class SensorRepository(
+    private val context: Context,
+    private val dataSource: SensorDataSource
+) {
     private val TAG = "VigoTrack"
     private val repositoryScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
@@ -41,6 +45,7 @@ class DeviceRepository(private val context: Context) {
     val discoveredDevices: StateFlow<Set<Sensor>> = _discoveredDevices.asStateFlow()
 
     private val _readyFeatures = MutableStateFlow<Map<String, Set<PolarBleApi.PolarBleSdkFeature>>>(emptyMap())
+
 
     init {
         setupPolarCallbacks()
@@ -92,6 +97,9 @@ class DeviceRepository(private val context: Context) {
             }
 
             override fun htsNotificationReceived(identifier: String, data: PolarHealthThermometerData) {}
+
+
+            repositoryScope.lauch()
 
         })
     }
