@@ -3,19 +3,28 @@ package com.maathisv.vigotrack.repository
 import android.content.Context
 import android.util.Log
 import com.maathisv.vigotrack.data.SensorDataSource
+import com.maathisv.vigotrack.models.ActivitySession
 import com.maathisv.vigotrack.models.ConnectionState
 import com.maathisv.vigotrack.models.Sensor
+import com.maathisv.vigotrack.models.StreamIdentifier
 import com.polar.androidcommunications.api.ble.model.DisInfo
 import com.polar.sdk.api.PolarBleApi
 import com.polar.sdk.api.PolarBleApiCallback
 import com.polar.sdk.api.PolarBleApiDefaultImpl
 import com.polar.sdk.api.model.PolarDeviceInfo
 import com.polar.sdk.api.model.PolarHealthThermometerData
+import com.polar.sdk.api.model.PolarSensorSetting
+import io.reactivex.rxjava3.core.Single
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.rx3.*
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 
 
 class SensorRepository(
@@ -46,6 +55,12 @@ class SensorRepository(
     val discoveredDevices: StateFlow<Set<Sensor>> = _discoveredDevices.asStateFlow()
 
     private val _readyFeatures = MutableStateFlow<Map<String, Set<PolarBleApi.PolarBleSdkFeature>>>(emptyMap())
+
+
+    private val activeJobs = mutableMapOf<StreamIdentifier, Job>()
+
+    private val _liveData = MutableStateFlow<Map<String, Map<String, Any>>>(emptyMap())
+    val liveData = _liveData.asStateFlow()
 
 
     init {
@@ -102,12 +117,6 @@ class SensorRepository(
                     val features = currentMap[identifier] ?: emptySet()
                     currentMap + (identifier to (features + feature))
                 }
-
-                // CHECK: If Online Streaming is ready, NOW we can start HR
-                if (feature == PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_ONLINE_STREAMING) {
-                    _connectionState.value = ConnectionState.FEATURES_READY
-                    startHrStreaming(identifier)
-                }
             }
 
             override fun disInformationReceived(identifier: String, disInfo: DisInfo) {
@@ -117,16 +126,6 @@ class SensorRepository(
             override fun htsNotificationReceived(identifier: String, data: PolarHealthThermometerData) {}
 
         })
-    }
-
-
-    private fun startHrStreaming(deviceId: String) {
-        api.startHrStreaming(deviceId)
-            .onEach { hrData ->
-                Log.d(TAG, "HR for $deviceId: ${hrData.samples.first().hr}")
-            }
-            .catch { e -> Log.e(TAG, "Stream failed for $deviceId", e) }
-            .launchIn(repositoryScope)
     }
 
 
@@ -173,4 +172,65 @@ class SensorRepository(
             _connectionState.value = ConnectionState.NOT_CONNECTED
         }
     }
+
+    private fun updateLiveData(deviceId: String, feature: String, value: Any) {
+        _liveData.update { currentMap ->
+            val deviceMap = currentMap[deviceId].orEmpty() + (feature to value)
+            currentMap + (deviceId to deviceMap)
+        }
+    }
+
+    suspend fun getSupportedSettings(deviceId: String, feature: PolarBleApi.PolarDeviceDataType): PolarSensorSetting {
+        return api.requestStreamSettings(deviceId, feature)
+    }
+
+    fun startFeatureStream(deviceId: String, feature: String, settings: PolarSensorSetting? = null) {
+        val id = StreamIdentifier(deviceId, feature)
+        if (activeJobs.containsKey(id)) return
+
+        val job = when (feature) {
+            "HR" -> api.startHrStreaming(deviceId)
+                .onEach { data -> updateLiveData(deviceId, "HR", data.samples.first().hr) }
+                .catch { e -> Log.e(TAG, "Stream failed: HR", e) }
+                .launchIn(repositoryScope)
+
+            "ECG" -> {
+                requireNotNull(settings) { "ECG requires settings" }
+                api.startEcgStreaming(deviceId, settings)
+                    .onEach { data -> updateLiveData(deviceId, "ECG", data.samples) }
+                    .catch { e -> Log.e(TAG, "Stream failed: ECG", e) }
+                    .launchIn(repositoryScope)
+            }
+
+            "ACC" -> {
+                requireNotNull(settings) { "ACC requires settings" }
+                api.startAccStreaming(deviceId, settings)
+                    .onEach { data -> updateLiveData(deviceId, "ACC", data.samples) }
+                    .catch { e -> Log.e(TAG, "Stream failed: ACC", e) }
+                    .launchIn(repositoryScope)
+            }
+            else -> return
+        }
+
+        activeJobs[id] = job
+    }
+
+    fun startActivityStreaming(session: ActivitySession) {
+        session.links.forEach { link ->
+            link.featuresToTrack.forEach { feature ->
+                startFeatureStream(link.sensorId, feature)
+            }
+        }
+    }
+
+    fun stopActivityStreaming(deviceId: String) {
+        activeJobs.keys
+            .filter { it.first == deviceId }
+            .forEach { id ->
+                activeJobs[id]?.cancel()
+                activeJobs.remove(id)
+            }
+    }
+
+
 }
