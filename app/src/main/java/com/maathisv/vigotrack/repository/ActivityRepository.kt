@@ -1,22 +1,42 @@
 package com.maathisv.vigotrack.repository
 
+import com.maathisv.vigotrack.data.ActivityDataSource
 import com.maathisv.vigotrack.models.ActivitySession
-import com.maathisv.vigotrack.models.ActivityLink
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import java.util.UUID
 
-class ActivityRepository {
-    // Keep your data in a simple memory list for now
-    private val _activities = MutableStateFlow<List<ActivitySession>>(emptyList())
-    val activities = _activities.asStateFlow()
+class ActivityRepository(private val dataSource: ActivityDataSource) {
 
-    fun createActivity(name: String) {
-        val newActivity = ActivitySession(id = UUID.randomUUID().toString(), name = name)
-        _activities.value += newActivity
+    // This is the source of truth from the Database
+    val allActivities = dataSource.getAllActivities()
+
+    // 1. Creation - Renamed from 'schedule' to 'create' to match your preference
+    suspend fun createActivity(name: String, scheduledDate: Long) {
+        val newActivity = ActivitySession(
+            id = UUID.randomUUID().toString(),
+            name = name,
+            scheduledDate = scheduledDate,
+            links = emptyList()
+        )
+        dataSource.insertActivity(newActivity)
     }
 
-    fun addLinkToActivity(activityId: String, link: ActivityLink) {
-        // TODO
+    // 2. Adding a link (Patient/Sensor pair) to an existing Activity
+    suspend fun addLinkToActivity(activityId: String, link: ActivitySession.ActivityLink) {
+        // We retrieve the latest activities from the stream
+        val currentActivities = allActivities.first()
+        val activity = currentActivities.find { it.id == activityId }
+
+        activity?.let {
+            val updatedActivity = it.copy(links = it.links + link)
+            dataSource.updateActivity(updatedActivity)
+        }
+    }
+
+    // 3. Execution - Marking when the workout actually begins
+    suspend fun startActivity(activity: ActivitySession) {
+        val startedActivity = activity.copy(
+            startTime = System.currentTimeMillis()
+        )
+        dataSource.updateActivity(startedActivity)
     }
 }
