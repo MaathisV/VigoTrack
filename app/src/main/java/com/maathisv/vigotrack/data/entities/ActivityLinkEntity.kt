@@ -2,16 +2,28 @@ package com.maathisv.vigotrack.data.entities
 
 import androidx.room.Entity
 import androidx.room.ForeignKey
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 @Entity(
     tableName = "activity_links",
+    indices = [  // ADD THIS
+        Index(value = ["parentActivityId"]),
+        Index(value = ["sensorId"]),
+        Index(value = ["patientId"])
+              ],
     foreignKeys = [
         ForeignKey(
             entity = ActivitySessionEntity::class,
             parentColumns = ["id"],
             childColumns = ["parentActivityId"],
-            onDelete = ForeignKey.CASCADE // Clean up links if activity is deleted
+            onDelete = ForeignKey.CASCADE
+        ),
+        ForeignKey(  // ADD THIS
+            entity = SensorEntity::class,
+            parentColumns = ["deviceId"],
+            childColumns = ["sensorId"],
+            onDelete = ForeignKey.CASCADE
         )
     ]
 )
@@ -20,5 +32,5 @@ data class ActivityLinkEntity(
     val parentActivityId: String,
     val patientId: String,
     val sensorId: String,
-    val featuresJson: String
+    val features: String
 )
