@@ -1,5 +1,6 @@
 package com.maathisv.vigotrack.models
 
+import com.maathisv.vigotrack.data.entities.ActivitySessionEntity
 import java.util.UUID
 
 data class ActivitySession(

@@ -6,10 +6,10 @@ import java.util.UUID
 
 class ActivityRepository(private val dataSource: ActivityDataSource) {
 
-    // This is the source of truth from the Database
+    // Source of truth (Mapping happens inside the DataSource implementation)
     val allActivities = dataSource.getAllActivities()
 
-    // 1. Creation - Renamed from 'schedule' to 'create' to match your preference
+    // 1. Create a fresh Activity (No links yet)
     suspend fun createActivity(name: String, scheduledDate: Long) {
         val newActivity = ActivitySession(
             id = UUID.randomUUID().toString(),
@@ -20,22 +20,16 @@ class ActivityRepository(private val dataSource: ActivityDataSource) {
         dataSource.insertActivity(newActivity)
     }
 
-    // 2. Adding a link (Patient/Sensor pair) to an existing Activity
+    // 2. Add a link (Relational way: Just insert the new row)
     suspend fun addLinkToActivity(activityId: String, link: ActivitySession.ActivityLink) {
-        // We retrieve the latest activities from the stream
-        val currentActivities = allActivities.first()
-        val activity = currentActivities.find { it.id == activityId }
-
-        activity?.let {
-            val updatedActivity = it.copy(links = it.links + link)
-            dataSource.updateActivity(updatedActivity)
-        }
+        dataSource.insertLink(activityId, link)
     }
 
-    // 3. Execution - Marking when the workout actually begins
+    // 3. Update activity status/times
     suspend fun startActivity(activity: ActivitySession) {
         val startedActivity = activity.copy(
-            startTime = System.currentTimeMillis()
+            startTime = System.currentTimeMillis(),
+            isRunning = true
         )
         dataSource.updateActivity(startedActivity)
     }
