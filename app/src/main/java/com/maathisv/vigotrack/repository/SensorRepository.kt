@@ -19,6 +19,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.rx3.*
@@ -67,9 +68,14 @@ class SensorRepository(
         setupPolarCallbacks()
 
         repositoryScope.launch {
+            delay(5000)
             dataSource.getSavedSensors().first().forEach { savedSensor ->
-                Log.d(TAG, "Auto-connecting to saved device: ${savedSensor.deviceId}")
-                connectByIdentifier(savedSensor.deviceId)
+                Log.d(TAG, "Attempting background reconnect to: ${savedSensor.deviceId}")
+                try {
+                    api.connectToDevice(savedSensor.deviceId)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Auto-connect failed for ${savedSensor.deviceId}", e)
+                }
             }
         }
     }
@@ -163,6 +169,10 @@ class SensorRepository(
     }
 
     private fun connectByIdentifier(identifier: String) {
+        if (_connectedDeviceIds.value.contains(identifier)) {
+            Log.d(TAG, "Already connected to $identifier, skipping.")
+            return
+        }
         Log.d(TAG, "Connecting to: $identifier")
         _connectionState.value = ConnectionState.CONNECTING
         try {
@@ -185,40 +195,92 @@ class SensorRepository(
     }
 
     fun startFeatureStream(deviceId: String, feature: String, settings: PolarSensorSetting? = null) {
+        // 1. CHECK IF FEATURE IS READY
+        // val readyForDevice = _readyFeatures.value[deviceId] ?: emptySet()
+
+        // Map our string names to Polar SdkFeatures
+        val polarFeature = when(feature) {
+            "HR" -> PolarBleApi.PolarBleSdkFeature.FEATURE_HR
+            "PPI" -> PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_ONLINE_STREAMING
+            "ACC" -> PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_ONLINE_STREAMING
+            else -> null
+        }
+
+        // If it's not ready yet, don't crash! Just log it and wait.
+        /*if (polarFeature != null && !readyForDevice.contains(polarFeature)) {
+            Log.w(TAG, "Cannot start $feature yet. $deviceId is not ready.")
+            return
+        }*/
+
         val id = StreamIdentifier(deviceId, feature)
-        if (activeJobs.containsKey(id)) return
+        if (activeJobs.containsKey(id) && activeJobs[id]?.isActive == true) {
+            Log.d(TAG, "Stream $feature already active for $deviceId. Skipping.")
+            return
+        }
+        activeJobs[id]?.cancel()
 
         val job = when (feature) {
             "HR" -> api.startHrStreaming(deviceId)
-                .onEach { data -> updateLiveData(deviceId, "HR", data.samples.first().hr) }
-                .catch { e -> Log.e(TAG, "Stream failed: HR", e) }
+                .onEach { data ->
+                    Log.d(TAG, "HR data received: ${data.samples.first().hr} for $deviceId")
+                    updateLiveData(deviceId, "HR", data.samples.first().hr)
+                }
+                .catch { e ->
+                    Log.e(TAG, "Stream failed: HR for $deviceId", e)
+                }
                 .launchIn(repositoryScope)
 
-            "ECG" -> {
-                requireNotNull(settings) { "ECG requires settings" }
-                api.startEcgStreaming(deviceId, settings)
-                    .onEach { data -> updateLiveData(deviceId, "ECG", data.samples) }
-                    .catch { e -> Log.e(TAG, "Stream failed: ECG", e) }
-                    .launchIn(repositoryScope)
-            }
+            "PPI" -> api.startPpiStreaming(deviceId)
+                .onEach { data ->
+                    // PPI has multiple samples per packet usually
+                    val latest = data.samples.first()
+                    Log.d(TAG, "PPI data received: ${latest.ppi} for $deviceId")
+                    updateLiveData(deviceId, "PPI", latest.ppi)
+                    // Most Polar devices include HR in the PPI packet too
+                    updateLiveData(deviceId, "HR", latest.hr)
+                }
+                .catch { e -> Log.e(TAG, "Stream failed: PPI for $deviceId", e) }
+                .launchIn(repositoryScope)
 
             "ACC" -> {
-                requireNotNull(settings) { "ACC requires settings" }
-                api.startAccStreaming(deviceId, settings)
-                    .onEach { data -> updateLiveData(deviceId, "ACC", data.samples) }
-                    .catch { e -> Log.e(TAG, "Stream failed: ACC", e) }
-                    .launchIn(repositoryScope)
+                repositoryScope.launch {
+                    try {
+                        // If settings are null, fetch default from device automatically
+                        val accSettings = settings ?: api.requestStreamSettings(deviceId, PolarBleApi.PolarDeviceDataType.ACC).maxSettings()
+
+                        api.startAccStreaming(deviceId, accSettings as PolarSensorSetting)
+                            .onEach { data ->
+                                val sample = data.samples.first()
+                                // Update live data with the first triplet for UI
+                                updateLiveData(deviceId, "ACC_X", sample.x)
+                                updateLiveData(deviceId, "ACC_Y", sample.y)
+                                updateLiveData(deviceId, "ACC_Z", sample.z)
+                                // Store the whole sample list if needed for logger
+                                updateLiveData(deviceId, "ACC_FULL", data.samples)
+                            }
+                            .catch { e -> Log.e(TAG, "ACC Stream internal fail", e) }
+                            .launchIn(repositoryScope)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to get ACC settings or start stream", e)
+                    }
+                }
+                Job()
             }
-            else -> return
+            else -> {
+                Log.e(TAG, "Unsupported feature: $feature")
+                Job()
+            }
         }
 
         activeJobs[id] = job
+        Log.d(TAG, "Started streaming $feature for $deviceId")
     }
 
-    fun startActivityStreaming(session: ActivitySession) {
+    suspend fun startActivityStreaming(session: ActivitySession) {
         session.links.forEach { link ->
             link.featuresToTrack.forEach { feature ->
                 startFeatureStream(link.sensorId, feature)
+                delay(300)
             }
         }
     }
@@ -226,10 +288,18 @@ class SensorRepository(
     fun stopActivityStreaming(deviceId: String) {
         activeJobs.keys
             .filter { it.first == deviceId }
+            .toList()
             .forEach { id ->
                 activeJobs[id]?.cancel()
                 activeJobs.remove(id)
             }
+        // api.disconnectFromDevice(deviceId)
+
+        // 3. Optional: reconnect after a second if you want to keep it "Connected" but not "Streaming"
+        // repositoryScope.launch {
+            //delay(2000)
+            //connectByIdentifier(deviceId)
+        //}
     }
 
 
