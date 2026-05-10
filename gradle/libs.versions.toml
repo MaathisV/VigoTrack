@@ -16,6 +16,7 @@ activityCompose = "1.13.0"
 composeBom = "2025.02.00"
 ui = "1.7.0"
 navigationCompose = "2.9.8"
+documentfile = "1.1.0"
 
 # Database (Room)
 room = "2.8.4"
@@ -30,6 +31,7 @@ coroutines = "1.10.1"
 junit = "4.13.2"
 junitVersion = "1.3.0"
 espressoCore = "3.7.0"
+documentfile = "1.1.0"
 
 [libraries]
 # AndroidX Core & Lifecycle

@@ -61,6 +61,7 @@ dependencies {
 
     // Room Database - Using the Bundle from TOML
     implementation(libs.bundles.room)
+    implementation(libs.androidx.documentfile)
     ksp(libs.androidx.room.compiler) // KSP must stay separate from bundles
 
     // Unit Testing
