@@ -33,4 +33,17 @@ class ActivityRepository(private val dataSource: ActivityDataSource) {
         )
         dataSource.updateActivity(startedActivity)
     }
+
+    suspend fun stopActivity(activity: ActivitySession) {
+        val stoppedActivity = activity.copy(
+            endTime = System.currentTimeMillis(),
+            isRunning = false
+        )
+        dataSource.updateActivity(stoppedActivity)
+    }
+
+    // Add this so the ViewModel can push any state change
+    suspend fun updateActivity(activity: ActivitySession) {
+        dataSource.updateActivity(activity)
+    }
 }
