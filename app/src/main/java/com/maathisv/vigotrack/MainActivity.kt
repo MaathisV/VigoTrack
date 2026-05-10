@@ -14,6 +14,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.maathisv.vigotrack.services.PolarService
 import com.maathisv.vigotrack.ui.navigation.VigoTrackNavGraph
 import com.maathisv.vigotrack.ui.screens.HomeViewModel
+import androidx.core.content.edit
 
 class MainActivity : ComponentActivity() {
 
@@ -60,11 +61,20 @@ class MainActivity : ComponentActivity() {
 
         val factory = viewModelFactory {
             initializer {
-                HomeViewModel(app.activityRepository, app.sensorRepository)
+                HomeViewModel(
+                    application = app, // Pass the app instance here
+                    activityRepo = app.activityRepository,
+                    sensorRepo = app.sensorRepository
+                )
             }
         }
 
         viewModel = ViewModelProvider(this, factory)[HomeViewModel::class.java]
+
+        val prefs = getSharedPreferences("vigo_prefs", MODE_PRIVATE)
+        if (prefs.getString("log_uri", null) == null) {
+            pickLogFolder()
+        }
 
         // Launch permissions
         permissionLauncher.launch(requiredPermissions)
@@ -73,6 +83,22 @@ class MainActivity : ComponentActivity() {
             VigoTrackNavGraph(homeViewModel = viewModel)
         }
     }
+
+
+    private val folderPicker = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        uri?.let {
+            contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            // Use "vigo_prefs" to match the Service
+            getSharedPreferences("vigo_prefs", MODE_PRIVATE).edit {
+                putString("log_uri", it.toString())
+            }
+        }
+    }
+
+    fun pickLogFolder() {
+        folderPicker.launch(null)
+    }
+
 
     // Using the Service as a 'Foreground Shield' keeps the app process high-priority,
     // allowing the singleton SensorRepository to maintain active BLE streams without the
