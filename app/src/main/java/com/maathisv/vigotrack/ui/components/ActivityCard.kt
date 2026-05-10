@@ -1,5 +1,6 @@
 package com.maathisv.vigotrack.ui.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,9 +18,9 @@ import androidx.compose.ui.unit.sp
 import com.maathisv.vigotrack.models.ActivitySession
 
 @Composable
-fun ActivityCard(session: ActivitySession) {
+fun ActivityCard(session: ActivitySession, onClick: () -> Unit = {}) {
     Card(
-        modifier = Modifier.height(120.dp),
+        modifier = Modifier.height(120.dp).clickable { onClick() },
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Column(

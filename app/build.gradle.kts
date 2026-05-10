@@ -56,6 +56,9 @@ dependencies {
     implementation(libs.rxjava)
     implementation(libs.kotlinx.coroutines.rx3)
 
+    // Navigation Compose
+    implementation(libs.androidx.navigation.compose)
+
     // Room Database - Using the Bundle from TOML
     implementation(libs.bundles.room)
     ksp(libs.androidx.room.compiler) // KSP must stay separate from bundles

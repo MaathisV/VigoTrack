@@ -22,8 +22,11 @@ import com.maathisv.vigotrack.ui.components.CreateActivityCard
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(viewModel: HomeViewModel) {
-    val activities by viewModel.activities.collectAsState()
+fun HomeScreen(
+    viewModel: HomeViewModel,
+    onActivityClick: (String) -> Unit
+) {
+    val activities by viewModel.activities.collectAsState(initial = emptyList())
 
     var showDialog by remember { mutableStateOf(false) }
     var newActivityName by remember { mutableStateOf("") }
@@ -90,7 +93,7 @@ fun HomeScreen(viewModel: HomeViewModel) {
             }
 
             items(activities) { session: ActivitySession ->
-                ActivityCard(session = session)
+                 ActivityCard(session = session, onClick = { onActivityClick(session.id) })
             }
         }
     }
@@ -110,9 +113,13 @@ fun HomeScreen(viewModel: HomeViewModel) {
             confirmButton = {
                 Button(onClick = {
                     if (newActivityName.isNotBlank()) {
-                        viewModel.onCreateActivityClicked(newActivityName)
-                        newActivityName = "" // clear the text
-                        showDialog = false   // close dialog
+                        // FIX: Pass the current time as the scheduled date
+                        viewModel.createActivity(
+                            name = newActivityName,
+                            date = System.currentTimeMillis()
+                        )
+                        newActivityName = ""
+                        showDialog = false
                     }
                 }) {
                     Text("Create")
