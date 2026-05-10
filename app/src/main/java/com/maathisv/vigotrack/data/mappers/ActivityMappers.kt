@@ -23,6 +23,7 @@ fun ActivityLinkEntity.toDomain(): ActivitySession.ActivityLink {
     return ActivitySession.ActivityLink(
         patientId = patientId,
         sensorId = sensorId,
+        patientName = patientId,
         featuresToTrack = features.split(",").filter { it.isNotBlank() }
     )
 }
