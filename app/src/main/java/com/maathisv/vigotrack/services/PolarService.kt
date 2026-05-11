@@ -65,7 +65,7 @@ class PolarService : LifecycleService() {
 
                     // LOG PPI
                     (dataMap["PPI"] as? Int)?.let { ppi ->
-                        val hr = dataMap["HR"] as? Int ?: null
+                        val hr = dataMap["HR"] as? Int ?: 0
                         onPpiReceived(logger, System.currentTimeMillis(), ppi, 0, hr)
                     }
 

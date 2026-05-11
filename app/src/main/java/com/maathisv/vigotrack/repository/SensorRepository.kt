@@ -248,7 +248,7 @@ class SensorRepository(
                         // If settings are null, fetch default from device automatically
                         val accSettings = settings ?: api.requestStreamSettings(deviceId, PolarBleApi.PolarDeviceDataType.ACC).maxSettings()
 
-                        api.startAccStreaming(deviceId, accSettings as PolarSensorSetting)
+                        api.startAccStreaming(deviceId, accSettings)
                             .onEach { data ->
                                 val sample = data.samples.first()
                                 // Update live data with the first triplet for UI
