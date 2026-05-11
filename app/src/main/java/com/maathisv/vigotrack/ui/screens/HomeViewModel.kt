@@ -3,8 +3,10 @@ package com.maathisv.vigotrack.ui.screens
 import android.app.Application
 import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.core.content.edit
+import com.maathisv.vigotrack.data.PatientDataSource
+import com.maathisv.vigotrack.models.Patient
 import com.maathisv.vigotrack.models.Sensor
 import com.maathisv.vigotrack.repository.ActivityRepository
 import com.maathisv.vigotrack.repository.SensorRepository
@@ -23,7 +25,8 @@ import com.maathisv.vigotrack.services.PolarService
 class HomeViewModel(
     private val application: Application,
     private val activityRepo: ActivityRepository,
-    private val sensorRepo: SensorRepository
+    private val sensorRepo: SensorRepository,
+    private val patientDataSource: PatientDataSource
 ) : AndroidViewModel(application) {
 
     val connectionState = sensorRepo.connectionState
@@ -45,9 +48,24 @@ class HomeViewModel(
     private val _isConnectingToId = MutableStateFlow<String?>(null)
     val isConnectingToId: StateFlow<String?> = _isConnectingToId.asStateFlow()
 
-    //val sensorLiveData: StateFlow<Map<String, StreamingData>> = sensorRepo.liveData
-    //    .map { it }
-    //    .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+    val patients: StateFlow<List<Patient>> = patientDataSource.getAllPatients()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _currentLogUri = MutableStateFlow(getSavedLogUri())
+    val currentLogUri: StateFlow<String> = _currentLogUri.asStateFlow()
+
+    private fun getSavedLogUri(): String {
+        return getApplication<Application>()
+            .getSharedPreferences("vigo_prefs", Application.MODE_PRIVATE)
+            .getString("log_uri", "") ?: ""
+    }
+
+    fun updateLogUri(uri: String) {
+        getApplication<Application>()
+            .getSharedPreferences("vigo_prefs", Application.MODE_PRIVATE)
+            .edit { putString("log_uri", uri) }
+        _currentLogUri.value = uri
+    }
 
     fun startScanning() {
         sensorRepo.startScanning()
@@ -108,6 +126,18 @@ class HomeViewModel(
                     getApplication<Application>().startService(serviceIntent)
                 }
             }
+        }
+    }
+
+    fun addPatient(name: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            patientDataSource.insertPatient(Patient(name = name))
+        }
+    }
+
+    fun deletePatient(patient: Patient) {
+        viewModelScope.launch(Dispatchers.IO) {
+            patientDataSource.deletePatient(patient)
         }
     }
 }

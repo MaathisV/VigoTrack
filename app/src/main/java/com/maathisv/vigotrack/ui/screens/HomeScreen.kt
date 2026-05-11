@@ -1,6 +1,7 @@
 package com.maathisv.vigotrack.ui.screens
 
 import android.Manifest
+import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -14,6 +15,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.maathisv.vigotrack.models.ActivitySession
 import com.maathisv.vigotrack.models.ConnectionState
@@ -44,6 +46,21 @@ fun HomeScreen(
         if (isGranted) {
             viewModel.startScanning()
             showConnectionDialog = true
+        }
+    }
+
+    val patients by viewModel.patients.collectAsState()
+    val currentLogUri by viewModel.currentLogUri.collectAsState()
+    val context = LocalContext.current
+    val folderPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        uri?.let {
+            context.contentResolver.takePersistableUriPermission(
+                it,
+                Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            )
+            viewModel.updateLogUri(it.toString())
         }
     }
 
@@ -113,7 +130,6 @@ fun HomeScreen(
             confirmButton = {
                 Button(onClick = {
                     if (newActivityName.isNotBlank()) {
-                        // FIX: Pass the current time as the scheduled date
                         viewModel.createActivity(
                             name = newActivityName,
                             date = System.currentTimeMillis()
@@ -136,10 +152,15 @@ fun HomeScreen(
     if (showConnectionDialog) {
         ConnectionDialog(
             scannedDevices = scannedDevices,
-            connectedDevicesList = connectedDevicesList, // Pass it here
+            connectedDevicesList = connectedDevicesList,
             connectingId = connectingId,
+            patients = patients,
+            currentLogUri = currentLogUri,
             onDismiss = { showConnectionDialog = false },
             onConnect = { id -> viewModel.connectToDevice(id) },
-            onDisconnect = { id -> viewModel.disconnectFromDevice(id) }
+            onDisconnect = { id -> viewModel.disconnectFromDevice(id) },
+            onAddPatient = { name -> viewModel.addPatient(name) },
+            onDeletePatient = { patient -> viewModel.deletePatient(patient) },
+            onPickLogFolder = { folderPickerLauncher.launch(null) }
         )}
 }

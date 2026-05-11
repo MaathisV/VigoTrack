@@ -62,9 +62,10 @@ class MainActivity : ComponentActivity() {
         val factory = viewModelFactory {
             initializer {
                 HomeViewModel(
-                    application = app, // Pass the app instance here
+                    application = app,
                     activityRepo = app.activityRepository,
-                    sensorRepo = app.sensorRepository
+                    sensorRepo = app.sensorRepository,
+                    patientDataSource = app.patientDataSource
                 )
             }
         }

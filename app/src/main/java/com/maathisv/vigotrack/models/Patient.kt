@@ -1,7 +1,7 @@
 package com.maathisv.vigotrack.models
 
 data class Patient(
-    val id: String,
+    val id: Long = 0,
     val name: String,
-    val isCalibrated: Boolean
+    val isCalibrated: Boolean = false
 )

@@ -2,7 +2,9 @@ package com.maathisv.vigotrack
 
 import android.app.Application
 import com.maathisv.vigotrack.data.ActivityDataSource
+import com.maathisv.vigotrack.data.PatientDataSource
 import com.maathisv.vigotrack.data.RoomActivityDataSource
+import com.maathisv.vigotrack.data.RoomPatientDataSource
 import com.maathisv.vigotrack.data.RoomSensorDataSource
 import com.maathisv.vigotrack.data.SensorDataSource
 import com.maathisv.vigotrack.repository.ActivityRepository
@@ -23,4 +25,8 @@ class VigoTrackApplication : Application() {
         RoomActivityDataSource(database.activityDao())
     }
     val activityRepository by lazy { ActivityRepository(activityDataSource) }
+
+    val patientDataSource: PatientDataSource by lazy {
+        RoomPatientDataSource(database.patientDao())
+    }
 }
