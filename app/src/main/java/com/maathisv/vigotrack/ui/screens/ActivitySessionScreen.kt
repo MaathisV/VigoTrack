@@ -1,0 +1,304 @@
+package com.maathisv.vigotrack.ui.screens
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.maathisv.vigotrack.models.ActivitySession
+import com.maathisv.vigotrack.models.ActivityStatus
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ActivitySessionScreen(
+    activityId: String,
+    homeViewModel: HomeViewModel,
+    onBack: () -> Unit
+) {
+    val allActivities by homeViewModel.activities.collectAsState(initial = emptyList<ActivitySession>())
+    val allLiveData by homeViewModel.sensorLiveData.collectAsState()
+
+    // 3. FIX: Don't define 'activity' twice.
+    val activity = allActivities.find { it.id == activityId }
+
+    var showLinkModal by remember { mutableStateOf(false) }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(activity?.name ?: "Session") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) { Text("<") }
+                }
+            )
+        }
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            if (activity == null) {
+                item { Text("Activity not found") }
+            }
+            else {
+                item { SessionStatusCard(activity) }
+
+                if (activity.status != ActivityStatus.COMPLETED) {
+                    item { StartStopControls(activity, homeViewModel) }
+                }
+
+                item { Text("Linked Sensors", style = MaterialTheme.typography.titleMedium) }
+
+                if (activity.links.isEmpty()) {
+                    item { Text("No sensors linked.") }
+                } else {
+                    // 4. FIX: ActivityLink is nested inside ActivitySession
+                    items(activity.links) { link ->
+                        SensorLinkCard(link = link)
+                    }
+                }
+
+                if (activity.status != ActivityStatus.COMPLETED) {
+                    item {
+                        Button(
+                            onClick = { showLinkModal = true },
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                        ) {
+                            Text("Configure New Sensor")
+                        }
+                    }
+                }
+
+                if (activity.status != ActivityStatus.SCHEDULED) {
+                    item { Text("Live Data", style = MaterialTheme.typography.titleMedium) }
+                    items(activity.links) { link ->
+                        SensorDataCard(link = link, homeViewModel = homeViewModel)
+                    }
+                }
+            }
+
+        }
+    }
+    if (showLinkModal) {
+        LinkConfigurationModal(
+            activityId = activityId,
+            homeViewModel = homeViewModel,
+            onDismiss = { showLinkModal = false },
+            onSave = { patient, sensor, features ->
+                homeViewModel.addLink(activityId, patient, sensor, features)
+                showLinkModal = false
+            }
+        )
+    }
+}
+
+@Composable
+fun SensorDataCard(
+    link: ActivitySession.ActivityLink,
+    homeViewModel: HomeViewModel
+) {
+    // 1. Observe the live data map from the ViewModel
+    val allLiveData by homeViewModel.sensorLiveData.collectAsState()
+
+    // 2. Extract the data for THIS specific sensor
+    val sensorData = allLiveData[link.sensorId]
+
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(text = "Patient: ${link.patientName}", style = MaterialTheme.typography.titleMedium)
+            Text(text = "ID: ${link.sensorId}", style = MaterialTheme.typography.labelSmall)
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                // Heart Rate Column
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("HR", style = MaterialTheme.typography.labelSmall)
+                    Text(
+                        text = "${sensorData?.get("HR") ?: "--"}",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text("bpm", style = MaterialTheme.typography.labelSmall)
+                }
+
+                // PPI Column
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("PPI", style = MaterialTheme.typography.labelSmall)
+                    Text(
+                        text = "${sensorData?.get("PPI") ?: "--"}",
+                        style = MaterialTheme.typography.headlineSmall
+                    )
+                    Text("ms", style = MaterialTheme.typography.labelSmall)
+                }
+
+                // ACC Column
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("ACC (X,Y,Z)", style = MaterialTheme.typography.labelSmall)
+                    val x = sensorData?.get("ACC_X") ?: "0"
+                    val y = sensorData?.get("ACC_Y") ?: "0"
+                    val z = sensorData?.get("ACC_Z") ?: "0"
+                    Text(text = "$x", style = MaterialTheme.typography.bodyMedium)
+                    Text(text = "$y", style = MaterialTheme.typography.bodyMedium)
+                    Text(text = "$z", style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LinkConfigurationModal(
+    activityId: String,
+    homeViewModel: HomeViewModel,
+    onDismiss: () -> Unit,
+    onSave: (String, String, List<String>) -> Unit // (Patient, Sensor, Features)
+) {
+    var patientName by remember { mutableStateOf("Patient ${System.currentTimeMillis().toString().takeLast(3)}") }
+    var expanded by remember { mutableStateOf(false) }
+
+    val availableSensors by homeViewModel.connectedDevicesList.collectAsState()
+    var selectedSensorId by remember { mutableStateOf("") }
+
+    var hrEnabled by remember { mutableStateOf(true) }
+    var ppiEnabled by remember { mutableStateOf(true) }
+    var accEnabled by remember { mutableStateOf(true) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Configure Sensor Link") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = patientName,
+                    onValueChange = { patientName = it },
+                    label = { Text("Patient Name") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                ExposedDropdownMenuBox(
+                    expanded = expanded,
+                    onExpandedChange = { expanded = !expanded }
+                ) {
+                    OutlinedTextField(
+                        value = if (selectedSensorId.isEmpty()) "Select a connected sensor" else selectedSensorId,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Available Sensors") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                        modifier = Modifier.menuAnchor().fillMaxWidth()
+                    )
+
+                    ExposedDropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false }
+                    ) {
+                        if (availableSensors.isEmpty()) {
+                            DropdownMenuItem(
+                                text = { Text("No sensors found. Connect in Home first.") },
+                                onClick = { expanded = false }
+                            )
+                        } else {
+                            availableSensors.forEach { sensorId ->
+                                DropdownMenuItem(
+                                    text = { Text(sensorId) },
+                                    onClick = {
+                                        selectedSensorId = sensorId
+                                        expanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Text("Features", style = MaterialTheme.typography.labelSmall)
+                Column {
+                    FeatureCheckbox("Heart Rate (HR)", hrEnabled) { hrEnabled = it }
+                    FeatureCheckbox("PP Interval (PPI)", ppiEnabled) { ppiEnabled = it }
+                    FeatureCheckbox("Accelerometer (ACC)", accEnabled) { accEnabled = it }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val features = mutableListOf<String>()
+                    if (hrEnabled) features.add("HR")
+                    if (ppiEnabled) features.add("PPI")
+                    if (accEnabled) features.add("ACC")
+                    onSave(patientName, selectedSensorId, features)
+                },
+                enabled = selectedSensorId.isNotBlank()
+            ) { Text("Link") }
+        }
+    )
+}
+
+@Composable
+fun FeatureCheckbox(label: String, isChecked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Checkbox(checked = isChecked, onCheckedChange = onCheckedChange)
+        Text(label)
+    }
+}
+@Composable
+fun SensorLinkCard(link: ActivitySession.ActivityLink) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text("Patient: ${link.patientName}", style = MaterialTheme.typography.bodyLarge)
+            Text("Sensor ID: ${link.sensorId}", style = MaterialTheme.typography.bodySmall)
+            Text("Features: ${link.featuresToTrack.joinToString(", ")}", style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
+@Composable
+fun StartStopControls(activity: ActivitySession, homeViewModel: HomeViewModel) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Center
+    ) {
+        Button(
+            onClick = { homeViewModel.toggleSession(activity) },
+            colors = if (activity.isRunning)
+                ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+            else ButtonDefaults.buttonColors(),
+            modifier = Modifier.fillMaxWidth().height(56.dp)
+        ) {
+            Text(if (activity.isRunning) "STOP SESSION" else "START SESSION")
+        }
+    }
+}
+
+@Composable
+fun SessionStatusCard(activity: ActivitySession) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(8.dp)
+    ) {
+        Column(modifier = androidx.compose.ui.Modifier.padding(16.dp)) {
+            Text(
+                text = "Status: ${activity.status}",
+                style = MaterialTheme.typography.headlineSmall
+            )
+            androidx.compose.material3.Text(text = "Activity ID: ${activity.id}")
+        }
+    }
+}
