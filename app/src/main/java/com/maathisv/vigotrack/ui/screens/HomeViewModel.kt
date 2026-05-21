@@ -118,15 +118,14 @@ class HomeViewModel(
                 getApplication<Application>().startService(intent)
             } else {
                 activityRepo.startActivity(activity)
-                activity.links.forEach { link ->
-                    sensorRepo.startActivityStreaming(activity)
+                sensorRepo.startActivityStreaming(activity)
 
-                    val serviceIntent = Intent(getApplication(), PolarService::class.java).apply {
-                        action = ACTION_START_STREAMS
-                        putExtra(EXTRA_SENSOR_ID, link.sensorId)
-                    }
-                    getApplication<Application>().startService(serviceIntent)
+                val sensorIds = activity.links.map { it.sensorId }.toTypedArray()
+                val intent = Intent(getApplication(), PolarService::class.java).apply {
+                    action = ACTION_START_STREAMS
+                    putExtra(EXTRA_SENSOR_IDS, sensorIds)
                 }
+                getApplication<Application>().startService(intent)
             }
         }
     }

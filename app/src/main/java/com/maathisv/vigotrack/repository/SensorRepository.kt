@@ -11,8 +11,11 @@ import com.polar.androidcommunications.api.ble.model.DisInfo
 import com.polar.sdk.api.PolarBleApi
 import com.polar.sdk.api.PolarBleApiCallback
 import com.polar.sdk.api.PolarBleApiDefaultImpl
+import com.polar.sdk.api.model.PolarAccelerometerData
 import com.polar.sdk.api.model.PolarDeviceInfo
 import com.polar.sdk.api.model.PolarHealthThermometerData
+import com.polar.sdk.api.model.PolarHrData
+import com.polar.sdk.api.model.PolarPpiData
 import com.polar.sdk.api.model.PolarSensorSetting
 import io.reactivex.rxjava3.core.Single
 import kotlinx.coroutines.CoroutineScope
@@ -63,21 +66,17 @@ class SensorRepository(
     private val _liveData = MutableStateFlow<Map<String, Map<String, Any>>>(emptyMap())
     val liveData = _liveData.asStateFlow()
 
+    private val _hrLogFlow = MutableSharedFlow<Pair<String, PolarHrData>>(extraBufferCapacity = 64)
+    val hrLogFlow: SharedFlow<Pair<String, PolarHrData>> = _hrLogFlow.asSharedFlow()
+
+    private val _ppiLogFlow = MutableSharedFlow<Pair<String, PolarPpiData>>(extraBufferCapacity = 64)
+    val ppiLogFlow: SharedFlow<Pair<String, PolarPpiData>> = _ppiLogFlow.asSharedFlow()
+
+    private val _accLogFlow = MutableSharedFlow<Pair<String, PolarAccelerometerData>>(extraBufferCapacity = 64)
+    val accLogFlow: SharedFlow<Pair<String, PolarAccelerometerData>> = _accLogFlow.asSharedFlow()
 
     init {
         setupPolarCallbacks()
-
-        repositoryScope.launch {
-            delay(5000)
-            dataSource.getSavedSensors().first().forEach { savedSensor ->
-                Log.d(TAG, "Attempting background reconnect to: ${savedSensor.deviceId}")
-                try {
-                    api.connectToDevice(savedSensor.deviceId)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Auto-connect failed for ${savedSensor.deviceId}", e)
-                }
-            }
-        }
     }
 
     private fun setupPolarCallbacks() {
@@ -222,10 +221,10 @@ class SensorRepository(
         val job = when (feature) {
             "HR" -> api.startHrStreaming(deviceId)
                 .onEach { data ->
+                    _hrLogFlow.tryEmit(deviceId to data)
                     val sample = data.samples.first()
                     Log.d(TAG, "HR data received: ${sample.hr} for $deviceId")
                     updateLiveData(deviceId, "HR", sample.hr)
-                    updateLiveData(deviceId, "HR_SAMPLE", sample)
                 }
                 .catch { e ->
                     Log.e(TAG, "Stream failed: HR for $deviceId", e)
@@ -234,11 +233,11 @@ class SensorRepository(
 
             "PPI" -> api.startPpiStreaming(deviceId)
                 .onEach { data ->
+                    _ppiLogFlow.tryEmit(deviceId to data)
                     val sample = data.samples.first()
                     Log.d(TAG, "PPI data received: ${sample.ppi} for $deviceId")
                     updateLiveData(deviceId, "PPI", sample.ppi)
                     updateLiveData(deviceId, "HR", sample.hr)
-                    updateLiveData(deviceId, "PPI_SAMPLE", sample)
                 }
                 .catch { e -> Log.e(TAG, "Stream failed: PPI for $deviceId", e) }
                 .launchIn(repositoryScope)
@@ -246,18 +245,20 @@ class SensorRepository(
             "ACC" -> {
                 repositoryScope.launch {
                     try {
-                        // If settings are null, fetch default from device automatically
                         val accSettings = settings ?: api.requestStreamSettings(deviceId, PolarBleApi.PolarDeviceDataType.ACC).maxSettings()
 
                         api.startAccStreaming(deviceId, accSettings)
                             .onEach { data ->
+                                _accLogFlow.tryEmit(deviceId to data)
                                 val sample = data.samples.first()
-                                // Update live data with the first triplet for UI
-                                updateLiveData(deviceId, "ACC_X", sample.x)
-                                updateLiveData(deviceId, "ACC_Y", sample.y)
-                                updateLiveData(deviceId, "ACC_Z", sample.z)
-                                // Store the whole sample list if needed for logger
-                                updateLiveData(deviceId, "ACC_FULL", data.samples)
+                                _liveData.update { currentMap ->
+                                    val deviceMap = currentMap[deviceId].orEmpty() + mapOf(
+                                        "ACC_X" to sample.x,
+                                        "ACC_Y" to sample.y,
+                                        "ACC_Z" to sample.z
+                                    )
+                                    currentMap + (deviceId to deviceMap)
+                                }
                             }
                             .catch { e -> Log.e(TAG, "ACC Stream internal fail", e) }
                             .launchIn(repositoryScope)

@@ -13,13 +13,12 @@ import com.maathisv.vigotrack.VigoTrackApplication
 import com.maathisv.vigotrack.repository.SensorRepository
 import com.maathisv.vigotrack.util.DataLogger
 import com.polar.sdk.api.model.PolarHrData
-import com.polar.sdk.api.model.PolarPpiData
 import kotlinx.coroutines.launch
 import androidx.core.net.toUri
 
 const val ACTION_START_STREAMS = "com.maathisv.vigotrack.START_STREAMS"
 const val ACTION_STOP_STREAMS = "com.maathisv.vigotrack.STOP_STREAMS"
-const val EXTRA_SENSOR_ID = "extra_sensor_id"
+const val EXTRA_SENSOR_IDS = "extra_sensor_ids"
 
 class PolarService : LifecycleService() {
     private val loggers = mutableMapOf<String, DataLogger>()
@@ -36,14 +35,15 @@ class PolarService : LifecycleService() {
 
         when (intent.action) {
             ACTION_START_STREAMS -> {
-                val sensorId = intent.getStringExtra(EXTRA_SENSOR_ID) ?: "unknown_device"
+                val sensorIds = intent.getStringArrayExtra(EXTRA_SENSOR_IDS) ?: return START_STICKY
                 val prefs = getSharedPreferences("vigo_prefs", MODE_PRIVATE)
                 val uriString = prefs.getString("log_uri", null)
 
                 if (uriString != null) {
                     startForeground(NOTIFICATION_ID, createNotification())
-                    val newLogger = DataLogger(applicationContext, uriString.toUri(), sensorId)
-                    loggers[sensorId] = newLogger
+                    sensorIds.forEach { sensorId ->
+                        loggers[sensorId] = DataLogger(applicationContext, uriString.toUri(), sensorId)
+                    }
                     observeSensorData()
                 }
             }
@@ -56,31 +56,25 @@ class PolarService : LifecycleService() {
 
     private fun observeSensorData() {
         lifecycleScope.launch {
-            repository.liveData.collect { allData ->
-                allData.forEach { (deviceId, dataMap) ->
-                    val logger = loggers[deviceId] ?: return@forEach
-
-                    // LOG HR
-                    val hrSample = dataMap["HR_SAMPLE"] as? PolarHrData.PolarHrSample
-                    hrSample?.let { s ->
-                        onHrReceived(logger, s)
-                    }
-
-                    // LOG PPI
-                    val ppiSample = dataMap["PPI_SAMPLE"] as? PolarPpiData.PolarPpiSample
-                    ppiSample?.let { s ->
-                        onPpiReceived(logger, s.timeStamp.toLong(), s.ppi, s.errorEstimate, s.hr,
-                            s.blockerBit, s.skinContactStatus, s.skinContactSupported)
-                    }
-
-                    // LOG ACC
-                    val accSamples = dataMap["ACC_FULL"] as? List<*>
-                    accSamples?.forEach { sample ->
-                        val accData = sample as? com.polar.sdk.api.model.PolarAccelerometerData.PolarAccelerometerDataSample
-                        accData?.let {
-                            onAccReceived(logger, it.timeStamp, it.x, it.y, it.z)
-                        }
-                    }
+            repository.hrLogFlow.collect { (deviceId, data) ->
+                val logger = loggers[deviceId] ?: return@collect
+                data.samples.forEach { s -> onHrReceived(logger, s) }
+            }
+        }
+        lifecycleScope.launch {
+            repository.ppiLogFlow.collect { (deviceId, data) ->
+                val logger = loggers[deviceId] ?: return@collect
+                data.samples.forEach { s ->
+                    onPpiReceived(logger, s.timeStamp.toLong(), s.ppi, s.errorEstimate, s.hr,
+                        s.blockerBit, s.skinContactStatus, s.skinContactSupported)
+                }
+            }
+        }
+        lifecycleScope.launch {
+            repository.accLogFlow.collect { (deviceId, data) ->
+                val logger = loggers[deviceId] ?: return@collect
+                data.samples.forEach { s ->
+                    onAccReceived(logger, s.timeStamp, s.x, s.y, s.z)
                 }
             }
         }
