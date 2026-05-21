@@ -12,6 +12,8 @@ import com.maathisv.vigotrack.R
 import com.maathisv.vigotrack.VigoTrackApplication
 import com.maathisv.vigotrack.repository.SensorRepository
 import com.maathisv.vigotrack.util.DataLogger
+import com.polar.sdk.api.model.PolarHrData
+import com.polar.sdk.api.model.PolarPpiData
 import kotlinx.coroutines.launch
 import androidx.core.net.toUri
 
@@ -59,14 +61,16 @@ class PolarService : LifecycleService() {
                     val logger = loggers[deviceId] ?: return@forEach
 
                     // LOG HR
-                    (dataMap["HR"] as? Int)?.let { hr ->
-                        onHrReceived(logger, hr)
+                    val hrSample = dataMap["HR_SAMPLE"] as? PolarHrData.PolarHrSample
+                    hrSample?.let { s ->
+                        onHrReceived(logger, s)
                     }
 
                     // LOG PPI
-                    (dataMap["PPI"] as? Int)?.let { ppi ->
-                        val hr = dataMap["HR"] as? Int ?: 0
-                        onPpiReceived(logger, System.currentTimeMillis(), ppi, 0, hr)
+                    val ppiSample = dataMap["PPI_SAMPLE"] as? PolarPpiData.PolarPpiSample
+                    ppiSample?.let { s ->
+                        onPpiReceived(logger, s.timeStamp.toLong(), s.ppi, s.errorEstimate, s.hr,
+                            s.blockerBit, s.skinContactStatus, s.skinContactSupported)
                     }
 
                     // LOG ACC
@@ -113,13 +117,12 @@ class PolarService : LifecycleService() {
         stopSelf()
     }
 
-    // Example: Hook into your HR listener
-    private fun onHrReceived(logger: DataLogger, hr: Int) {
-        val timestamp = System.currentTimeMillis()
+    private fun onHrReceived(logger: DataLogger, sample: PolarHrData.PolarHrSample) {
+        val timestamp = System.nanoTime()
         logger.logData(
             tag = "HR",
             header = "TIMESTAMP HR PPQ_QUALITY CORRECTED_HR RR_AVAILABLE CONTACT_SUPPORTED CONTACT_STATUS RR(ms)",
-            dataLine = "$timestamp $hr 0 $hr false true true NA"
+            dataLine = "$timestamp ${sample.hr} ${sample.ppgQuality} ${sample.correctedHr} ${sample.rrAvailable} ${sample.contactStatusSupported} ${sample.contactStatus} ${if (sample.rrsMs.isEmpty()) "NA" else sample.rrsMs.joinToString(" ")}"
         )
     }
 
@@ -131,11 +134,12 @@ class PolarService : LifecycleService() {
         )
     }
 
-    private fun onPpiReceived(logger: DataLogger, timestamp: Long, ppi: Int, error: Int, hr: Int) {
+    private fun onPpiReceived(logger: DataLogger, timestamp: Long, ppi: Int, errorEstimate: Int, hr: Int,
+                              blockerBit: Boolean, skinContactStatus: Boolean, skinContactSupported: Boolean) {
         logger.logData(
             tag = "PPI",
             header = "TIMESTAMP PPI(ms) ERROR_ESTIMATE BLOCKER_BIT SKIN_CONTACT_STATUS SKIN_CONTACT_SUPPORT HR",
-            dataLine = "$timestamp $ppi $error 0 1 1 $hr"
+            dataLine = "$timestamp $ppi $errorEstimate $blockerBit $skinContactStatus $skinContactSupported $hr"
         )
     }
 

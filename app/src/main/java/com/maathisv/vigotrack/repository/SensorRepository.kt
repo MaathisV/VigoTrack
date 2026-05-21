@@ -222,8 +222,10 @@ class SensorRepository(
         val job = when (feature) {
             "HR" -> api.startHrStreaming(deviceId)
                 .onEach { data ->
-                    Log.d(TAG, "HR data received: ${data.samples.first().hr} for $deviceId")
-                    updateLiveData(deviceId, "HR", data.samples.first().hr)
+                    val sample = data.samples.first()
+                    Log.d(TAG, "HR data received: ${sample.hr} for $deviceId")
+                    updateLiveData(deviceId, "HR", sample.hr)
+                    updateLiveData(deviceId, "HR_SAMPLE", sample)
                 }
                 .catch { e ->
                     Log.e(TAG, "Stream failed: HR for $deviceId", e)
@@ -232,12 +234,11 @@ class SensorRepository(
 
             "PPI" -> api.startPpiStreaming(deviceId)
                 .onEach { data ->
-                    // PPI has multiple samples per packet usually
-                    val latest = data.samples.first()
-                    Log.d(TAG, "PPI data received: ${latest.ppi} for $deviceId")
-                    updateLiveData(deviceId, "PPI", latest.ppi)
-                    // Most Polar devices include HR in the PPI packet too
-                    updateLiveData(deviceId, "HR", latest.hr)
+                    val sample = data.samples.first()
+                    Log.d(TAG, "PPI data received: ${sample.ppi} for $deviceId")
+                    updateLiveData(deviceId, "PPI", sample.ppi)
+                    updateLiveData(deviceId, "HR", sample.hr)
+                    updateLiveData(deviceId, "PPI_SAMPLE", sample)
                 }
                 .catch { e -> Log.e(TAG, "Stream failed: PPI for $deviceId", e) }
                 .launchIn(repositoryScope)
