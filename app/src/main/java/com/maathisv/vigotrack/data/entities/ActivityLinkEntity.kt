@@ -7,7 +7,7 @@ import androidx.room.PrimaryKey
 
 @Entity(
     tableName = "activity_links",
-    indices = [  // ADD THIS
+    indices = [
         Index(value = ["parentActivityId"]),
         Index(value = ["sensorId"]),
         Index(value = ["patientId"])
@@ -19,18 +19,25 @@ import androidx.room.PrimaryKey
             childColumns = ["parentActivityId"],
             onDelete = ForeignKey.CASCADE
         ),
-        ForeignKey(  // ADD THIS
+        ForeignKey(
             entity = SensorEntity::class,
             parentColumns = ["deviceId"],
             childColumns = ["sensorId"],
             onDelete = ForeignKey.CASCADE
+        ),
+        ForeignKey(
+            entity = PatientEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["patientId"],
+            onDelete = ForeignKey.SET_NULL
         )
     ]
 )
 data class ActivityLinkEntity(
     @PrimaryKey(autoGenerate = true) val linkId: Long = 0,
     val parentActivityId: String,
-    val patientId: String,
+    val patientId: Long?,
+    val patientName: String,
     val sensorId: String,
     val features: String
 )

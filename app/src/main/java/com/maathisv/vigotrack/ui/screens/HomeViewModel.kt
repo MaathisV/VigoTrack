@@ -91,12 +91,13 @@ class HomeViewModel(
         }
     }
 
-    fun addLink(activityId: String, patientId: String, sensorId: String, features: List<String>) {
-        viewModelScope.launch {
+    fun addLink(activityId: String, patientId: Long?, patientName: String, sensorId: String, features: List<String>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val finalPatientId = patientId ?: patientDataSource.insertPatient(Patient(name = patientName))
             val link = ActivitySession.ActivityLink(
-                patientId = patientId,
+                patientId = finalPatientId,
+                patientName = patientName,
                 sensorId = sensorId,
-                patientName = patientId,
                 featuresToTrack = features
             )
             activityRepo.addLinkToActivity(activityId, link)

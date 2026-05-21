@@ -11,6 +11,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.maathisv.vigotrack.models.ActivitySession
 import com.maathisv.vigotrack.models.ActivityStatus
+import com.maathisv.vigotrack.models.Patient
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -87,12 +88,14 @@ fun ActivitySessionScreen(
         }
     }
     if (showLinkModal) {
+        val patients by homeViewModel.patients.collectAsState()
         LinkConfigurationModal(
             activityId = activityId,
+            patients = patients,
             homeViewModel = homeViewModel,
             onDismiss = { showLinkModal = false },
-            onSave = { patient, sensor, features ->
-                homeViewModel.addLink(activityId, patient, sensor, features)
+            onSave = { patientId, patientName, sensor, features ->
+                homeViewModel.addLink(activityId, patientId, patientName, sensor, features)
                 showLinkModal = false
             }
         )
@@ -164,15 +167,19 @@ fun SensorDataCard(
 @Composable
 fun LinkConfigurationModal(
     activityId: String,
+    patients: List<Patient>,
     homeViewModel: HomeViewModel,
     onDismiss: () -> Unit,
-    onSave: (String, String, List<String>) -> Unit // (Patient, Sensor, Features)
+    onSave: (Long?, String, String, List<String>) -> Unit // (PatientId, PatientName, Sensor, Features)
 ) {
-    var patientName by remember { mutableStateOf("Patient ${System.currentTimeMillis().toString().takeLast(3)}") }
+    var patientName by remember { mutableStateOf("") }
+    var selectedPatientId by remember { mutableStateOf<Long?>(null) }
     var expanded by remember { mutableStateOf(false) }
+    var patientDropdownExpanded by remember { mutableStateOf(false) }
 
     val availableSensors by homeViewModel.connectedDevicesList.collectAsState()
     var selectedSensorId by remember { mutableStateOf("") }
+    var sensorDropdownExpanded by remember { mutableStateOf(false) }
 
     var hrEnabled by remember { mutableStateOf(true) }
     var ppiEnabled by remember { mutableStateOf(true) }
@@ -183,34 +190,67 @@ fun LinkConfigurationModal(
         title = { Text("Configure Sensor Link") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = patientName,
-                    onValueChange = { patientName = it },
-                    label = { Text("Patient Name") },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                ExposedDropdownMenuBox(
+                    expanded = patientDropdownExpanded,
+                    onExpandedChange = { patientDropdownExpanded = it }
+                ) {
+                    OutlinedTextField(
+                        value = patientName,
+                        onValueChange = {
+                            patientName = it
+                            selectedPatientId = null
+                            patientDropdownExpanded = true
+                        },
+                        label = { Text("Patient Name") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = patientDropdownExpanded) },
+                        modifier = Modifier.menuAnchor().fillMaxWidth()
+                    )
+
+                    ExposedDropdownMenu(
+                        expanded = patientDropdownExpanded,
+                        onDismissRequest = { patientDropdownExpanded = false }
+                    ) {
+                        if (patients.isEmpty()) {
+                            DropdownMenuItem(
+                                text = { Text("No patients saved yet") },
+                                onClick = { patientDropdownExpanded = false }
+                            )
+                        } else {
+                            patients.forEach { patient ->
+                                DropdownMenuItem(
+                                    text = { Text(patient.name) },
+                                    onClick = {
+                                        patientName = patient.name
+                                        selectedPatientId = patient.id
+                                        patientDropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
 
                 ExposedDropdownMenuBox(
-                    expanded = expanded,
-                    onExpandedChange = { expanded = !expanded }
+                    expanded = sensorDropdownExpanded,
+                    onExpandedChange = { sensorDropdownExpanded = it }
                 ) {
                     OutlinedTextField(
                         value = if (selectedSensorId.isEmpty()) "Select a connected sensor" else selectedSensorId,
                         onValueChange = {},
                         readOnly = true,
                         label = { Text("Available Sensors") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = sensorDropdownExpanded) },
                         modifier = Modifier.menuAnchor().fillMaxWidth()
                     )
 
                     ExposedDropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false }
+                        expanded = sensorDropdownExpanded,
+                        onDismissRequest = { sensorDropdownExpanded = false }
                     ) {
                         if (availableSensors.isEmpty()) {
                             DropdownMenuItem(
                                 text = { Text("No sensors found. Connect in Home first.") },
-                                onClick = { expanded = false }
+                                onClick = { sensorDropdownExpanded = false }
                             )
                         } else {
                             availableSensors.forEach { sensorId ->
@@ -218,7 +258,7 @@ fun LinkConfigurationModal(
                                     text = { Text(sensorId) },
                                     onClick = {
                                         selectedSensorId = sensorId
-                                        expanded = false
+                                        sensorDropdownExpanded = false
                                     }
                                 )
                             }
@@ -241,9 +281,9 @@ fun LinkConfigurationModal(
                     if (hrEnabled) features.add("HR")
                     if (ppiEnabled) features.add("PPI")
                     if (accEnabled) features.add("ACC")
-                    onSave(patientName, selectedSensorId, features)
+                    onSave(selectedPatientId, patientName, selectedSensorId, features)
                 },
-                enabled = selectedSensorId.isNotBlank()
+                enabled = selectedSensorId.isNotBlank() && patientName.isNotBlank()
             ) { Text("Link") }
         }
     )

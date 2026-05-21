@@ -22,8 +22,8 @@ fun ActivityWithLinks.toDomain(): ActivitySession {
 fun ActivityLinkEntity.toDomain(): ActivitySession.ActivityLink {
     return ActivitySession.ActivityLink(
         patientId = patientId,
+        patientName = patientName,
         sensorId = sensorId,
-        patientName = patientId,
         featuresToTrack = features.split(",").filter { it.isNotBlank() }
     )
 }
@@ -45,6 +45,7 @@ fun ActivitySession.ActivityLink.toEntity(activityId: String): ActivityLinkEntit
     return ActivityLinkEntity(
         parentActivityId = activityId,
         patientId = patientId,
+        patientName = patientName,
         sensorId = sensorId,
         features = featuresToTrack.joinToString(",")
     )

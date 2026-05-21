@@ -20,9 +20,9 @@ data class ActivitySession(
         }
 
     data class ActivityLink(
-        val patientId: String,
+        val patientId: Long?,
+        val patientName: String,
         val sensorId: String,
-        val patientName: String = "Unknown",
         val featuresToTrack: List<String> = emptyList()
     ) {
         // UI Helpers: The screen is looking for these booleans
