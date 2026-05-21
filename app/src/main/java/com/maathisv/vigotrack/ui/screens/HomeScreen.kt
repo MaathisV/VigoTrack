@@ -4,23 +4,32 @@ import android.Manifest
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.maathisv.vigotrack.models.ActivityCategory
 import com.maathisv.vigotrack.models.ActivitySession
+import com.maathisv.vigotrack.models.ActivityType
 import com.maathisv.vigotrack.models.ConnectionState
 import com.maathisv.vigotrack.ui.components.ActivityCard
 import com.maathisv.vigotrack.ui.components.CreateActivityCard
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -31,7 +40,10 @@ fun HomeScreen(
     val activities by viewModel.activities.collectAsState(initial = emptyList())
 
     var showDialog by remember { mutableStateOf(false) }
-    var newActivityName by remember { mutableStateOf("") }
+    var selectedType by remember { mutableStateOf<ActivityType?>(null) }
+    var selectedDate by remember { mutableStateOf(System.currentTimeMillis()) }
+    var showDatePicker by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
 
     val connectionState by viewModel.connectionState.collectAsState()
     val scannedDevices by viewModel.scannedDevices.collectAsState()
@@ -115,34 +127,133 @@ fun HomeScreen(
         }
     }
 
-    // 3. The Pop-up Dialog Logic
     if (showDialog) {
+        val dateFormat = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()) }
+        val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+
         AlertDialog(
-            onDismissRequest = { showDialog = false },
+            onDismissRequest = { showDialog = false; selectedType = null },
             title = { Text("New Activity") },
             text = {
-                OutlinedTextField(
-                    value = newActivityName,
-                    onValueChange = { newActivityName = it },
-                    label = { Text("Activity Name") }
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Activités", style = MaterialTheme.typography.titleSmall)
+                    ActivityType.entries.filter { it.category == ActivityCategory.ACTIVITE }.forEach { type ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable { selectedType = type }
+                        ) {
+                            RadioButton(
+                                selected = selectedType == type,
+                                onClick = { selectedType = type }
+                            )
+                            Text(type.displayName)
+                        }
+                    }
+
+                    HorizontalDivider()
+
+                    Text("Bilans", style = MaterialTheme.typography.titleSmall)
+                    ActivityType.entries.filter { it.category == ActivityCategory.BILAN }.forEach { type ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable { selectedType = type }
+                        ) {
+                            RadioButton(
+                                selected = selectedType == type,
+                                onClick = { selectedType = type }
+                            )
+                            Text(type.displayName)
+                        }
+                    }
+
+                    HorizontalDivider()
+
+                    OutlinedTextField(
+                        value = dateFormat.format(Date(selectedDate)),
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Scheduled Date") },
+                        modifier = Modifier.fillMaxWidth().clickable { showDatePicker = true },
+                        trailingIcon = {
+                            Icon(Icons.Default.DateRange, contentDescription = "Select date")
+                        }
+                    )
+
+                    OutlinedTextField(
+                        value = timeFormat.format(Date(selectedDate)),
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Scheduled Time") },
+                        modifier = Modifier.fillMaxWidth().clickable { showTimePicker = true }
+                    )
+                }
             },
             confirmButton = {
-                Button(onClick = {
-                    if (newActivityName.isNotBlank()) {
-                        viewModel.createActivity(
-                            name = newActivityName,
-                            date = System.currentTimeMillis()
-                        )
-                        newActivityName = ""
-                        showDialog = false
-                    }
-                }) {
+                Button(
+                    onClick = {
+                        selectedType?.let {
+                            viewModel.createActivity(it, selectedDate)
+                            showDialog = false
+                        }
+                    },
+                    enabled = selectedType != null
+                ) {
                     Text("Create")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDialog = false }) {
+                TextButton(onClick = { showDialog = false; selectedType = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = selectedDate)
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let { selectedDate = it }
+                    showDatePicker = false
+                }) {
+                    Text("OK")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("Cancel")
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+
+    if (showTimePicker) {
+        val calendar = Calendar.getInstance().apply { timeInMillis = selectedDate }
+        val timePickerState = rememberTimePickerState(
+            initialHour = calendar.get(Calendar.HOUR_OF_DAY),
+            initialMinute = calendar.get(Calendar.MINUTE),
+            is24Hour = true
+        )
+        AlertDialog(
+            onDismissRequest = { showTimePicker = false },
+            title = { Text("Select Time") },
+            text = { TimePicker(state = timePickerState) },
+            confirmButton = {
+                TextButton(onClick = {
+                    calendar.set(Calendar.HOUR_OF_DAY, timePickerState.hour)
+                    calendar.set(Calendar.MINUTE, timePickerState.minute)
+                    selectedDate = calendar.timeInMillis
+                    showTimePicker = false
+                }) {
+                    Text("OK")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTimePicker = false }) {
                     Text("Cancel")
                 }
             }

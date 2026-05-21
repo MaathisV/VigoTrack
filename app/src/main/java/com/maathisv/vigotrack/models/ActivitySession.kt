@@ -4,7 +4,7 @@ import java.util.UUID
 
 data class ActivitySession(
     val id: String = UUID.randomUUID().toString(),
-    val name: String,
+    val activityType: ActivityType,
     val links: List<ActivityLink> = emptyList(),
     val scheduledDate: Long,
     val startTime: Long? = null,

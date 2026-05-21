@@ -4,12 +4,12 @@ import com.maathisv.vigotrack.data.ActivityWithLinks
 import com.maathisv.vigotrack.data.entities.ActivityLinkEntity
 import com.maathisv.vigotrack.data.entities.ActivitySessionEntity
 import com.maathisv.vigotrack.models.ActivitySession
+import com.maathisv.vigotrack.models.ActivityType
 
-// 1. Map the POJO (DB) -> Domain (App)
 fun ActivityWithLinks.toDomain(): ActivitySession {
     return ActivitySession(
         id = activity.id,
-        name = activity.name,
+        activityType = ActivityType.valueOf(activity.activityType),
         scheduledDate = activity.scheduledDate,
         startTime = activity.startTime,
         endTime = activity.endTime,
@@ -18,7 +18,6 @@ fun ActivityWithLinks.toDomain(): ActivitySession {
     )
 }
 
-// 2. Map the Link Entity (DB) -> Domain Link (App)
 fun ActivityLinkEntity.toDomain(): ActivitySession.ActivityLink {
     return ActivitySession.ActivityLink(
         patientId = patientId,
@@ -28,11 +27,10 @@ fun ActivityLinkEntity.toDomain(): ActivitySession.ActivityLink {
     )
 }
 
-// 3. Map Domain Session (App) -> Entity (DB)
 fun ActivitySession.toEntity(): ActivitySessionEntity {
     return ActivitySessionEntity(
         id = id,
-        name = name,
+        activityType = activityType.name,
         scheduledDate = scheduledDate,
         startTime = startTime,
         endTime = endTime,
@@ -40,7 +38,6 @@ fun ActivitySession.toEntity(): ActivitySessionEntity {
     )
 }
 
-// 4. Map Domain Link (App) -> Entity (DB) - THIS IS THE ONE CAUSING THE ERROR
 fun ActivitySession.ActivityLink.toEntity(activityId: String): ActivityLinkEntity {
     return ActivityLinkEntity(
         parentActivityId = activityId,

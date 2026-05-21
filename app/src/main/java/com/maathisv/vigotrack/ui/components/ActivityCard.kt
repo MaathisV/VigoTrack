@@ -31,7 +31,7 @@ fun ActivityCard(session: ActivitySession, onClick: () -> Unit = {}) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = session.name,
+                text = session.activityType.displayName,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Medium
             )

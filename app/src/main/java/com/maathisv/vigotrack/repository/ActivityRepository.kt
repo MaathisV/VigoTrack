@@ -2,6 +2,7 @@ package com.maathisv.vigotrack.repository
 
 import com.maathisv.vigotrack.data.ActivityDataSource
 import com.maathisv.vigotrack.models.ActivitySession
+import com.maathisv.vigotrack.models.ActivityType
 import java.util.UUID
 
 class ActivityRepository(private val dataSource: ActivityDataSource) {
@@ -10,10 +11,10 @@ class ActivityRepository(private val dataSource: ActivityDataSource) {
     val allActivities = dataSource.getAllActivities()
 
     // 1. Create a fresh Activity (No links yet)
-    suspend fun createActivity(name: String, scheduledDate: Long) {
+    suspend fun createActivity(type: ActivityType, scheduledDate: Long) {
         val newActivity = ActivitySession(
             id = UUID.randomUUID().toString(),
-            name = name,
+            activityType = type,
             scheduledDate = scheduledDate,
             links = emptyList()
         )

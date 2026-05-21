@@ -31,7 +31,7 @@ fun ActivitySessionScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(activity?.name ?: "Session") },
+                title = { Text(activity?.activityType?.displayName ?: "Session") },
                 navigationIcon = {
                     IconButton(onClick = onBack) { Text("<") }
                 }
@@ -203,7 +203,7 @@ fun LinkConfigurationModal(
                         },
                         label = { Text("Patient Name") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = patientDropdownExpanded) },
-                        modifier = Modifier.menuAnchor().fillMaxWidth()
+                        modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryEditable, enabled = true).fillMaxWidth()
                     )
 
                     ExposedDropdownMenu(
@@ -235,12 +235,12 @@ fun LinkConfigurationModal(
                     onExpandedChange = { sensorDropdownExpanded = it }
                 ) {
                     OutlinedTextField(
-                        value = if (selectedSensorId.isEmpty()) "Select a connected sensor" else selectedSensorId,
+                        value = selectedSensorId.ifEmpty { "Select a connected sensor" },
                         onValueChange = {},
                         readOnly = true,
                         label = { Text("Available Sensors") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = sensorDropdownExpanded) },
-                        modifier = Modifier.menuAnchor().fillMaxWidth()
+                        modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true).fillMaxWidth()
                     )
 
                     ExposedDropdownMenu(
@@ -333,12 +333,12 @@ fun SessionStatusCard(activity: ActivitySession) {
     Card(
         modifier = Modifier.fillMaxWidth().padding(8.dp)
     ) {
-        Column(modifier = androidx.compose.ui.Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = "Status: ${activity.status}",
                 style = MaterialTheme.typography.headlineSmall
             )
-            androidx.compose.material3.Text(text = "Activity ID: ${activity.id}")
+            Text(text = "Activity ID: ${activity.id}")
         }
     }
 }

@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import com.maathisv.vigotrack.models.ActivitySession
+import com.maathisv.vigotrack.models.ActivityType
 import com.maathisv.vigotrack.services.*
 import com.maathisv.vigotrack.services.PolarService
 
@@ -85,9 +86,9 @@ class HomeViewModel(
         }
     }
 
-    fun createActivity(name: String, date: Long) {
+    fun createActivity(type: ActivityType, date: Long) {
         viewModelScope.launch {
-            activityRepo.createActivity(name, date)
+            activityRepo.createActivity(type, date)
         }
     }
 
