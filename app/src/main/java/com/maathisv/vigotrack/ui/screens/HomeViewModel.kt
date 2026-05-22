@@ -55,10 +55,19 @@ class HomeViewModel(
     private val _currentLogUri = MutableStateFlow(getSavedLogUri())
     val currentLogUri: StateFlow<String> = _currentLogUri.asStateFlow()
 
+    private val _namingTemplate = MutableStateFlow(getFileNamingTemplate())
+    val namingTemplate: StateFlow<String> = _namingTemplate.asStateFlow()
+
     private fun getSavedLogUri(): String {
         return getApplication<Application>()
             .getSharedPreferences("vigo_prefs", Application.MODE_PRIVATE)
             .getString("log_uri", "") ?: ""
+    }
+
+    private fun getFileNamingTemplate(): String {
+        return getApplication<Application>()
+            .getSharedPreferences("vigo_prefs", Application.MODE_PRIVATE)
+            .getString("file_naming_template", DEFAULT_TEMPLATE) ?: DEFAULT_TEMPLATE
     }
 
     fun updateLogUri(uri: String) {
@@ -66,6 +75,17 @@ class HomeViewModel(
             .getSharedPreferences("vigo_prefs", Application.MODE_PRIVATE)
             .edit { putString("log_uri", uri) }
         _currentLogUri.value = uri
+    }
+
+    fun updateNamingTemplate(template: String) {
+        getApplication<Application>()
+            .getSharedPreferences("vigo_prefs", Application.MODE_PRIVATE)
+            .edit { putString("file_naming_template", template) }
+        _namingTemplate.value = template
+    }
+
+    fun resetNamingTemplate() {
+        updateNamingTemplate(DEFAULT_TEMPLATE)
     }
 
     fun startScanning() {
@@ -121,9 +141,12 @@ class HomeViewModel(
                 sensorRepo.startActivityStreaming(activity)
 
                 val sensorIds = activity.links.map { it.sensorId }.toTypedArray()
+                val firstLink = activity.links.firstOrNull()
                 val intent = Intent(getApplication(), PolarService::class.java).apply {
                     action = ACTION_START_STREAMS
                     putExtra(EXTRA_SENSOR_IDS, sensorIds)
+                    putExtra(EXTRA_ACTIVITY_NAME, activity.activityType.displayName)
+                    putExtra(EXTRA_PATIENT_NAME, firstLink?.patientName ?: "")
                 }
                 getApplication<Application>().startService(intent)
             }

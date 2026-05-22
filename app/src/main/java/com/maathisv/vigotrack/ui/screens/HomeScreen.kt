@@ -63,6 +63,7 @@ fun HomeScreen(
 
     val patients by viewModel.patients.collectAsState()
     val currentLogUri by viewModel.currentLogUri.collectAsState()
+    val namingTemplate by viewModel.namingTemplate.collectAsState()
     val context = LocalContext.current
     val folderPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
@@ -267,11 +268,14 @@ fun HomeScreen(
             connectingId = connectingId,
             patients = patients,
             currentLogUri = currentLogUri,
+            namingTemplate = namingTemplate,
             onDismiss = { showConnectionDialog = false },
             onConnect = { id -> viewModel.connectToDevice(id) },
             onDisconnect = { id -> viewModel.disconnectFromDevice(id) },
             onAddPatient = { name -> viewModel.addPatient(name) },
             onDeletePatient = { patient -> viewModel.deletePatient(patient) },
-            onPickLogFolder = { folderPickerLauncher.launch(null) }
+            onPickLogFolder = { folderPickerLauncher.launch(null) },
+            onTemplateChange = { viewModel.updateNamingTemplate(it) },
+            onResetTemplate = { viewModel.resetNamingTemplate() }
         )}
 }

@@ -19,6 +19,10 @@ import androidx.core.net.toUri
 const val ACTION_START_STREAMS = "com.maathisv.vigotrack.START_STREAMS"
 const val ACTION_STOP_STREAMS = "com.maathisv.vigotrack.STOP_STREAMS"
 const val EXTRA_SENSOR_IDS = "extra_sensor_ids"
+const val EXTRA_ACTIVITY_NAME = "extra_activity_name"
+const val EXTRA_PATIENT_NAME = "extra_patient_name"
+
+const val DEFAULT_TEMPLATE = "{date}_{activity}_{patient}_{device}_{tag}"
 
 class PolarService : LifecycleService() {
     private val loggers = mutableMapOf<String, DataLogger>()
@@ -36,13 +40,21 @@ class PolarService : LifecycleService() {
         when (intent.action) {
             ACTION_START_STREAMS -> {
                 val sensorIds = intent.getStringArrayExtra(EXTRA_SENSOR_IDS) ?: return START_STICKY
+                val activityName = intent.getStringExtra(EXTRA_ACTIVITY_NAME) ?: ""
+                val patientName = intent.getStringExtra(EXTRA_PATIENT_NAME) ?: ""
                 val prefs = getSharedPreferences("vigo_prefs", MODE_PRIVATE)
                 val uriString = prefs.getString("log_uri", null)
+                val template = prefs.getString("file_naming_template", null) ?: DEFAULT_TEMPLATE
 
                 if (uriString != null) {
                     startForeground(NOTIFICATION_ID, createNotification())
                     sensorIds.forEach { sensorId ->
-                        loggers[sensorId] = DataLogger(applicationContext, uriString.toUri(), sensorId)
+                        loggers[sensorId] = DataLogger(
+                            applicationContext, uriString.toUri(), sensorId,
+                            namingTemplate = template,
+                            activityName = activityName,
+                            patientName = patientName
+                        )
                     }
                     observeSensorData()
                 }

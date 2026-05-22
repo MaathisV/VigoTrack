@@ -23,12 +23,15 @@ fun ConnectionDialog(
     connectingId: String?,
     patients: List<Patient>,
     currentLogUri: String,
+    namingTemplate: String,
     onDismiss: () -> Unit,
     onConnect: (Sensor) -> Unit,
     onDisconnect: (String) -> Unit,
     onAddPatient: (String) -> Unit,
     onDeletePatient: (Patient) -> Unit,
-    onPickLogFolder: () -> Unit
+    onPickLogFolder: () -> Unit,
+    onTemplateChange: (String) -> Unit,
+    onResetTemplate: () -> Unit
 ) {
     var selectedTab by remember { mutableStateOf(0) }
 
@@ -69,7 +72,10 @@ fun ConnectionDialog(
                 )
                 2 -> SettingsTab(
                     currentLogUri = currentLogUri,
-                    onPickLogFolder = onPickLogFolder
+                    namingTemplate = namingTemplate,
+                    onPickLogFolder = onPickLogFolder,
+                    onTemplateChange = onTemplateChange,
+                    onResetTemplate = onResetTemplate
                 )
             }
         },
@@ -245,8 +251,13 @@ private fun PatientTab(
 @Composable
 private fun SettingsTab(
     currentLogUri: String,
-    onPickLogFolder: () -> Unit
+    namingTemplate: String,
+    onPickLogFolder: () -> Unit,
+    onTemplateChange: (String) -> Unit,
+    onResetTemplate: () -> Unit
 ) {
+    var showPlaceholders by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -282,5 +293,58 @@ private fun SettingsTab(
         Button(onClick = onPickLogFolder) {
             Text("Change Export Folder")
         }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+        Text(
+            text = "File Naming Template",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = namingTemplate,
+            onValueChange = onTemplateChange,
+            label = { Text("Template") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(onClick = onResetTemplate) {
+                Text("Reset to Default")
+            }
+            TextButton(onClick = { showPlaceholders = true }) {
+                Text("Placeholders...")
+            }
+        }
+    }
+
+    if (showPlaceholders) {
+        AlertDialog(
+            onDismissRequest = { showPlaceholders = false },
+            title = { Text("Available Placeholders") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("{activity} - Activity type (e.g. MARCHE)")
+                    Text("{patient} - Patient name")
+                    Text("{device} - Device identifier")
+                    Text("{tag} - Data stream (HR, PPI, ACC)")
+                    Text("{date} - Date (YYYY-MM-DD)")
+                    Text("{time} - Time (HH-MM-SS)")
+                    Text("{datetime} - Combined date_time")
+                    Text("{timestamp} - Unix epoch ms")
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showPlaceholders = false }) {
+                    Text("Close")
+                }
+            }
+        )
     }
 }
