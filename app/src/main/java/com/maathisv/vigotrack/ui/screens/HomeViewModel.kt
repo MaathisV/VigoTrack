@@ -52,6 +52,12 @@ class HomeViewModel(
     val patients: StateFlow<List<Patient>> = patientDataSource.getAllPatients()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val deviceAvailableDataTypes = sensorRepo.availableStreamDataTypes
+
+    fun getAvailableFeaturesForDevice(deviceId: String): Set<String> {
+        return sensorRepo.getAvailableFeaturesForDevice(deviceId)
+    }
+
     private val _currentLogUri = MutableStateFlow(getSavedLogUri())
     val currentLogUri: StateFlow<String> = _currentLogUri.asStateFlow()
 

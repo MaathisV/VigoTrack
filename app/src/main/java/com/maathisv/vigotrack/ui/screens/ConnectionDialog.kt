@@ -108,9 +108,9 @@ private fun DeviceTab(
             )
         } else {
             Column {
-                connectedDevicesList.forEach { id ->
-                    ListItem(
-                        headlineContent = { Text("Polar Watch ($id)") },
+                    connectedDevicesList.forEach { id ->
+                        ListItem(
+                            headlineContent = { Text("Polar Device ($id)") },
                         trailingContent = {
                             TextButton(onClick = { onDisconnect(id) }) {
                                 Text("Disconnect", color = MaterialTheme.colorScheme.error)
@@ -333,7 +333,7 @@ private fun SettingsTab(
                     Text("{activity} - Activity type (e.g. MARCHE)")
                     Text("{patient} - Patient name")
                     Text("{device} - Device identifier")
-                    Text("{tag} - Data stream (HR, PPI, ACC)")
+                    Text("{tag} - Data stream (HR, PPI, ACC, ECG)")
                     Text("{date} - Date (YYYY-MM-DD)")
                     Text("{time} - Time (HH-MM-SS)")
                     Text("{datetime} - Combined date_time")

@@ -158,6 +158,17 @@ fun SensorDataCard(
                     Text(text = "$y", style = MaterialTheme.typography.bodyMedium)
                     Text(text = "$z", style = MaterialTheme.typography.bodyMedium)
                 }
+
+                // ECG Column
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("ECG", style = MaterialTheme.typography.labelSmall)
+                    Text(
+                        text = "${sensorData?.get("ECG") ?: "--"}",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
+                    Text("uV", style = MaterialTheme.typography.labelSmall)
+                }
             }
         }
     }
@@ -184,6 +195,15 @@ fun LinkConfigurationModal(
     var hrEnabled by remember { mutableStateOf(true) }
     var ppiEnabled by remember { mutableStateOf(true) }
     var accEnabled by remember { mutableStateOf(true) }
+    var ecgEnabled by remember { mutableStateOf(false) }
+
+    val availableFeatures = remember(selectedSensorId) {
+        if (selectedSensorId.isNotBlank()) {
+            homeViewModel.getAvailableFeaturesForDevice(selectedSensorId)
+        } else {
+            emptySet()
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -267,10 +287,18 @@ fun LinkConfigurationModal(
                 }
 
                 Text("Features", style = MaterialTheme.typography.labelSmall)
+                if (availableFeatures.isNotEmpty()) {
+                    Text("Device supports: ${availableFeatures.joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
+                }
+                Spacer(modifier = Modifier.height(4.dp))
                 Column {
-                    FeatureCheckbox("Heart Rate (HR)", hrEnabled) { hrEnabled = it }
-                    FeatureCheckbox("PP Interval (PPI)", ppiEnabled) { ppiEnabled = it }
-                    FeatureCheckbox("Accelerometer (ACC)", accEnabled) { accEnabled = it }
+                    FeatureCheckbox("Heart Rate (HR)", hrEnabled, enabled = availableFeatures.contains("HR")) { hrEnabled = it }
+                    FeatureCheckbox("PP Interval (PPI)", ppiEnabled, enabled = availableFeatures.contains("PPI")) { ppiEnabled = it }
+                    FeatureCheckbox("Accelerometer (ACC)", accEnabled, enabled = availableFeatures.contains("ACC")) { accEnabled = it }
+                    FeatureCheckbox("ECG", ecgEnabled, enabled = availableFeatures.contains("ECG")) { ecgEnabled = it }
+                }
+                if (availableFeatures.isEmpty() && selectedSensorId.isNotBlank()) {
+                    Text("Feature info not yet available — ensure device is connected long enough", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                 }
             }
         },
@@ -281,6 +309,7 @@ fun LinkConfigurationModal(
                     if (hrEnabled) features.add("HR")
                     if (ppiEnabled) features.add("PPI")
                     if (accEnabled) features.add("ACC")
+                    if (ecgEnabled) features.add("ECG")
                     onSave(selectedPatientId, patientName, selectedSensorId, features)
                 },
                 enabled = selectedSensorId.isNotBlank() && patientName.isNotBlank()
@@ -290,10 +319,10 @@ fun LinkConfigurationModal(
 }
 
 @Composable
-fun FeatureCheckbox(label: String, isChecked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+fun FeatureCheckbox(label: String, isChecked: Boolean, enabled: Boolean = true, onCheckedChange: (Boolean) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Checkbox(checked = isChecked, onCheckedChange = onCheckedChange)
-        Text(label)
+        Checkbox(checked = isChecked && enabled, onCheckedChange = { if (enabled) onCheckedChange(it) }, enabled = enabled)
+        Text(label, color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f))
     }
 }
 @Composable

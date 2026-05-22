@@ -12,6 +12,7 @@ import com.maathisv.vigotrack.R
 import com.maathisv.vigotrack.VigoTrackApplication
 import com.maathisv.vigotrack.repository.SensorRepository
 import com.maathisv.vigotrack.util.DataLogger
+import com.polar.sdk.api.model.PolarEcgData
 import com.polar.sdk.api.model.PolarHrData
 import kotlinx.coroutines.launch
 import androidx.core.net.toUri
@@ -90,6 +91,14 @@ class PolarService : LifecycleService() {
                 }
             }
         }
+        lifecycleScope.launch {
+            repository.ecgLogFlow.collect { (deviceId, data) ->
+                val logger = loggers[deviceId] ?: return@collect
+                data.samples.forEach { s ->
+                    onEcgReceived(logger, s)
+                }
+            }
+        }
     }
 
     private fun createNotification(): Notification {
@@ -147,6 +156,25 @@ class PolarService : LifecycleService() {
             header = "TIMESTAMP PPI(ms) ERROR_ESTIMATE BLOCKER_BIT SKIN_CONTACT_STATUS SKIN_CONTACT_SUPPORT HR",
             dataLine = "$timestamp $ppi $errorEstimate $blockerBit $skinContactStatus $skinContactSupported $hr"
         )
+    }
+
+    private fun onEcgReceived(logger: DataLogger, sample: Any) {
+        when (sample) {
+            is com.polar.sdk.api.model.EcgSample -> {
+                logger.logData(
+                    tag = "ECG",
+                    header = "TIMESTAMP VOLTAGE(uV)",
+                    dataLine = "${sample.timeStamp} ${sample.voltage}"
+                )
+            }
+            is com.polar.sdk.api.model.FecgSample -> {
+                logger.logData(
+                    tag = "ECG",
+                    header = "TIMESTAMP VOLTAGE(uV) BIOZ STATUS",
+                    dataLine = "${sample.timeStamp} ${sample.ecg} ${sample.bioz} ${sample.status}"
+                )
+            }
+        }
     }
 
 
