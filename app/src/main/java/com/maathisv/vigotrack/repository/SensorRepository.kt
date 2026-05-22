@@ -13,6 +13,7 @@ import com.polar.sdk.api.PolarBleApiCallback
 import com.polar.sdk.api.PolarBleApiDefaultImpl
 import com.polar.sdk.api.model.PolarAccelerometerData
 import com.polar.sdk.api.model.PolarDeviceInfo
+import com.polar.sdk.api.model.PolarEcgData
 import com.polar.sdk.api.model.PolarHealthThermometerData
 import com.polar.sdk.api.model.PolarHrData
 import com.polar.sdk.api.model.PolarPpiData
@@ -74,6 +75,9 @@ class SensorRepository(
 
     private val _accLogFlow = MutableSharedFlow<Pair<String, PolarAccelerometerData>>(extraBufferCapacity = 64)
     val accLogFlow: SharedFlow<Pair<String, PolarAccelerometerData>> = _accLogFlow.asSharedFlow()
+
+    private val _ecgLogFlow = MutableSharedFlow<Pair<String, PolarEcgData>>(extraBufferCapacity = 64)
+    val ecgLogFlow: SharedFlow<Pair<String, PolarEcgData>> = _ecgLogFlow.asSharedFlow()
 
     init {
         setupPolarCallbacks()
@@ -202,6 +206,7 @@ class SensorRepository(
             "HR" -> PolarBleApi.PolarBleSdkFeature.FEATURE_HR
             "PPI" -> PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_ONLINE_STREAMING
             "ACC" -> PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_ONLINE_STREAMING
+            "ECG" -> PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_ONLINE_STREAMING
             else -> null
         }
 
@@ -264,6 +269,34 @@ class SensorRepository(
                             .launchIn(repositoryScope)
                     } catch (e: Exception) {
                         Log.e(TAG, "Failed to get ACC settings or start stream", e)
+                    }
+                }
+                Job()
+            }
+            "ECG" -> {
+                repositoryScope.launch {
+                    try {
+                        val ecgSettings = settings ?: api.requestStreamSettings(deviceId, PolarBleApi.PolarDeviceDataType.ECG).maxSettings()
+
+                        api.startEcgStreaming(deviceId, ecgSettings)
+                            .onEach { data ->
+                                _ecgLogFlow.tryEmit(deviceId to data)
+                                val sample = data.samples.first()
+                                val voltage = when (sample) {
+                                    is com.polar.sdk.api.model.EcgSample -> sample.voltage
+                                    is com.polar.sdk.api.model.FecgSample -> sample.ecg
+                                }
+                                _liveData.update { currentMap ->
+                                    val deviceMap = currentMap[deviceId].orEmpty() + mapOf(
+                                        "ECG" to voltage
+                                    )
+                                    currentMap + (deviceId to deviceMap)
+                                }
+                            }
+                            .catch { e -> Log.e(TAG, "ECG Stream internal fail", e) }
+                            .launchIn(repositoryScope)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to get ECG settings or start stream", e)
                     }
                 }
                 Job()

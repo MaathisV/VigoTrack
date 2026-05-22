@@ -158,6 +158,17 @@ fun SensorDataCard(
                     Text(text = "$y", style = MaterialTheme.typography.bodyMedium)
                     Text(text = "$z", style = MaterialTheme.typography.bodyMedium)
                 }
+
+                // ECG Column
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("ECG", style = MaterialTheme.typography.labelSmall)
+                    Text(
+                        text = "${sensorData?.get("ECG") ?: "--"}",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
+                    Text("uV", style = MaterialTheme.typography.labelSmall)
+                }
             }
         }
     }
@@ -184,6 +195,7 @@ fun LinkConfigurationModal(
     var hrEnabled by remember { mutableStateOf(true) }
     var ppiEnabled by remember { mutableStateOf(true) }
     var accEnabled by remember { mutableStateOf(true) }
+    var ecgEnabled by remember { mutableStateOf(false) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -271,6 +283,7 @@ fun LinkConfigurationModal(
                     FeatureCheckbox("Heart Rate (HR)", hrEnabled) { hrEnabled = it }
                     FeatureCheckbox("PP Interval (PPI)", ppiEnabled) { ppiEnabled = it }
                     FeatureCheckbox("Accelerometer (ACC)", accEnabled) { accEnabled = it }
+                    FeatureCheckbox("ECG (requires H10 chest strap)", ecgEnabled) { ecgEnabled = it }
                 }
             }
         },
@@ -281,6 +294,7 @@ fun LinkConfigurationModal(
                     if (hrEnabled) features.add("HR")
                     if (ppiEnabled) features.add("PPI")
                     if (accEnabled) features.add("ACC")
+                    if (ecgEnabled) features.add("ECG")
                     onSave(selectedPatientId, patientName, selectedSensorId, features)
                 },
                 enabled = selectedSensorId.isNotBlank() && patientName.isNotBlank()
