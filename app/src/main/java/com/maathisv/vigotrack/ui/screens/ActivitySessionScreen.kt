@@ -197,6 +197,14 @@ fun LinkConfigurationModal(
     var accEnabled by remember { mutableStateOf(true) }
     var ecgEnabled by remember { mutableStateOf(false) }
 
+    val availableFeatures = remember(selectedSensorId) {
+        if (selectedSensorId.isNotBlank()) {
+            homeViewModel.getAvailableFeaturesForDevice(selectedSensorId)
+        } else {
+            emptySet()
+        }
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Configure Sensor Link") },
@@ -279,11 +287,18 @@ fun LinkConfigurationModal(
                 }
 
                 Text("Features", style = MaterialTheme.typography.labelSmall)
+                if (availableFeatures.isNotEmpty()) {
+                    Text("Device supports: ${availableFeatures.joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
+                }
+                Spacer(modifier = Modifier.height(4.dp))
                 Column {
-                    FeatureCheckbox("Heart Rate (HR)", hrEnabled) { hrEnabled = it }
-                    FeatureCheckbox("PP Interval (PPI)", ppiEnabled) { ppiEnabled = it }
-                    FeatureCheckbox("Accelerometer (ACC)", accEnabled) { accEnabled = it }
-                    FeatureCheckbox("ECG (requires H10 chest strap)", ecgEnabled) { ecgEnabled = it }
+                    FeatureCheckbox("Heart Rate (HR)", hrEnabled, enabled = availableFeatures.contains("HR")) { hrEnabled = it }
+                    FeatureCheckbox("PP Interval (PPI)", ppiEnabled, enabled = availableFeatures.contains("PPI")) { ppiEnabled = it }
+                    FeatureCheckbox("Accelerometer (ACC)", accEnabled, enabled = availableFeatures.contains("ACC")) { accEnabled = it }
+                    FeatureCheckbox("ECG", ecgEnabled, enabled = availableFeatures.contains("ECG")) { ecgEnabled = it }
+                }
+                if (availableFeatures.isEmpty() && selectedSensorId.isNotBlank()) {
+                    Text("Feature info not yet available — ensure device is connected long enough", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                 }
             }
         },
@@ -304,10 +319,10 @@ fun LinkConfigurationModal(
 }
 
 @Composable
-fun FeatureCheckbox(label: String, isChecked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+fun FeatureCheckbox(label: String, isChecked: Boolean, enabled: Boolean = true, onCheckedChange: (Boolean) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Checkbox(checked = isChecked, onCheckedChange = onCheckedChange)
-        Text(label)
+        Checkbox(checked = isChecked && enabled, onCheckedChange = { if (enabled) onCheckedChange(it) }, enabled = enabled)
+        Text(label, color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f))
     }
 }
 @Composable

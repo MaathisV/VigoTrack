@@ -11,6 +11,7 @@ import com.polar.androidcommunications.api.ble.model.DisInfo
 import com.polar.sdk.api.PolarBleApi
 import com.polar.sdk.api.PolarBleApiCallback
 import com.polar.sdk.api.PolarBleApiDefaultImpl
+import com.polar.sdk.api.PolarBleApi.PolarDeviceDataType
 import com.polar.sdk.api.model.PolarAccelerometerData
 import com.polar.sdk.api.model.PolarDeviceInfo
 import com.polar.sdk.api.model.PolarEcgData
@@ -61,6 +62,8 @@ class SensorRepository(
 
     private val _readyFeatures = MutableStateFlow<Map<String, Set<PolarBleApi.PolarBleSdkFeature>>>(emptyMap())
 
+    private val _availableStreamDataTypes = MutableStateFlow<Map<String, Set<PolarDeviceDataType>>>(emptyMap())
+    val availableStreamDataTypes: StateFlow<Map<String, Set<PolarDeviceDataType>>> = _availableStreamDataTypes.asStateFlow()
 
     private val activeJobs = mutableMapOf<StreamIdentifier, Job>()
 
@@ -114,6 +117,7 @@ class SensorRepository(
                 Log.d(TAG, "Disconnected from ${polarDeviceInfo.deviceId}")
                 _connectedDeviceIds.update { it - polarDeviceInfo.deviceId }
                 _readyFeatures.update { it - polarDeviceInfo.deviceId }
+                _availableStreamDataTypes.update { it - polarDeviceInfo.deviceId }
                 if (_connectedDeviceIds.value.isEmpty()) {
                     _connectionState.value = ConnectionState.NOT_CONNECTED
                 }
@@ -125,6 +129,38 @@ class SensorRepository(
                 _readyFeatures.update { currentMap ->
                     val features = currentMap[identifier] ?: emptySet()
                     currentMap + (identifier to (features + feature))
+                }
+            }
+
+            override fun bleSdkFeaturesReadiness(identifier: String, ready: List<PolarBleApi.PolarBleSdkFeature>, unavailable: List<PolarBleApi.PolarBleSdkFeature>) {
+                Log.d(TAG, "Features readiness for $identifier. Ready: $ready, Unavailable: $unavailable")
+                _readyFeatures.update { currentMap ->
+                    val existing = currentMap[identifier] ?: emptySet()
+                    currentMap + (identifier to (existing + ready.toSet()))
+                }
+
+                if (ready.contains(PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_ONLINE_STREAMING)) {
+                    repositoryScope.launch {
+                        try {
+                            val types = api.getAvailableOnlineStreamDataTypes(identifier)
+                            updateAvailableDataTypes(identifier, types)
+                            Log.d(TAG, "Available online stream types for $identifier: $types")
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to get online stream types for $identifier", e)
+                        }
+                    }
+                }
+
+                if (ready.contains(PolarBleApi.PolarBleSdkFeature.FEATURE_HR)) {
+                    repositoryScope.launch {
+                        try {
+                            val types = api.getAvailableHRServiceDataTypes(identifier)
+                            updateAvailableDataTypes(identifier, types)
+                            Log.d(TAG, "Available HR service types for $identifier: $types")
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Failed to get HR service types for $identifier", e)
+                        }
+                    }
                 }
             }
 
@@ -193,15 +229,33 @@ class SensorRepository(
         }
     }
 
+    private fun updateAvailableDataTypes(deviceId: String, types: Set<PolarDeviceDataType>) {
+        _availableStreamDataTypes.update { current ->
+            val existing = current[deviceId] ?: emptySet()
+            current + (deviceId to (existing + types))
+        }
+    }
+
+    fun getAvailableFeaturesForDevice(deviceId: String): Set<String> {
+        val types = _availableStreamDataTypes.value[deviceId] ?: return emptySet()
+        return types.mapNotNull { type ->
+            when (type) {
+                PolarDeviceDataType.HR -> "HR"
+                PolarDeviceDataType.PPI -> "PPI"
+                PolarDeviceDataType.ACC -> "ACC"
+                PolarDeviceDataType.ECG -> "ECG"
+                else -> null
+            }
+        }.toSet()
+    }
+
     suspend fun getSupportedSettings(deviceId: String, feature: PolarBleApi.PolarDeviceDataType): PolarSensorSetting {
         return api.requestStreamSettings(deviceId, feature)
     }
 
     fun startFeatureStream(deviceId: String, feature: String, settings: PolarSensorSetting? = null) {
-        // 1. CHECK IF FEATURE IS READY
-        // val readyForDevice = _readyFeatures.value[deviceId] ?: emptySet()
+        val readyForDevice = _readyFeatures.value[deviceId] ?: emptySet()
 
-        // Map our string names to Polar SdkFeatures
         val polarFeature = when(feature) {
             "HR" -> PolarBleApi.PolarBleSdkFeature.FEATURE_HR
             "PPI" -> PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_ONLINE_STREAMING
@@ -210,11 +264,10 @@ class SensorRepository(
             else -> null
         }
 
-        // If it's not ready yet, don't crash! Just log it and wait.
-        /*if (polarFeature != null && !readyForDevice.contains(polarFeature)) {
+        if (polarFeature != null && !readyForDevice.contains(polarFeature)) {
             Log.w(TAG, "Cannot start $feature yet. $deviceId is not ready.")
             return
-        }*/
+        }
 
         val id = StreamIdentifier(deviceId, feature)
         if (activeJobs.containsKey(id) && activeJobs[id]?.isActive == true) {
