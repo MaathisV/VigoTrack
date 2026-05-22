@@ -84,6 +84,37 @@ class SensorRepository(
 
     init {
         setupPolarCallbacks()
+        autoReconnectToSavedDevices()
+    }
+
+    private fun autoReconnectToSavedDevices() {
+        repositoryScope.launch {
+            // delay(5000)
+            dataSource.getSavedSensors().first().forEach { saved ->
+                Log.d(TAG, "Auto-reconnecting to saved device: ${saved.deviceId} (${saved.name})")
+                connectWithRetry(saved.deviceId)
+                delay(5000)
+            }
+        }
+    }
+
+    private suspend fun connectWithRetry(deviceId: String, maxRetries: Int = 3) {
+        _connectionState.value = ConnectionState.CONNECTING
+        repeat(maxRetries) { attempt ->
+            try {
+                api.connectToDevice(deviceId)
+                _connectedDeviceIds.update { it + deviceId }
+                _connectionState.value = ConnectionState.CONNECTED
+                return
+            } catch (e: Exception) {
+                if (attempt < maxRetries - 1) {
+                    Log.w(TAG, "Retry $attempt for $deviceId: ${e.message}")
+                    delay(2000)
+                }
+            }
+        }
+        _connectionState.value = ConnectionState.NOT_CONNECTED
+        Log.e(TAG, "Could not reconnect to $deviceId after $maxRetries attempts")
     }
 
     private fun setupPolarCallbacks() {
