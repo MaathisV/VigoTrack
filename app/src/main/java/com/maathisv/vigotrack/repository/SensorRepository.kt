@@ -1,5 +1,6 @@
 package com.maathisv.vigotrack.repository
 
+import android.Manifest
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
@@ -8,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.util.Log
+import androidx.annotation.RequiresPermission
 import com.maathisv.vigotrack.data.SensorDataSource
 import com.maathisv.vigotrack.models.ActivitySession
 import com.maathisv.vigotrack.models.ConnectionState
@@ -25,7 +27,6 @@ import com.polar.sdk.api.model.PolarHealthThermometerData
 import com.polar.sdk.api.model.PolarHrData
 import com.polar.sdk.api.model.PolarPpiData
 import com.polar.sdk.api.model.PolarSensorSetting
-import io.reactivex.rxjava3.core.Single
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -33,7 +34,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.rx3.*
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -83,6 +83,7 @@ class SensorRepository(
     val availableStreamDataTypes: StateFlow<Map<String, Set<PolarDeviceDataType>>> = _availableStreamDataTypes.asStateFlow()
 
     private val activeJobs = mutableMapOf<StreamIdentifier, Job>()
+    private var healthMonitorJob: Job? = null
 
     private val _liveData = MutableStateFlow<Map<String, Map<String, Any>>>(emptyMap())
     val liveData = _liveData.asStateFlow()
@@ -103,6 +104,7 @@ class SensorRepository(
         setupPolarCallbacks()
         autoReconnectToSavedDevices()
         registerBleAclReceiver()
+        startHealthMonitor()
     }
 
     private fun autoReconnectToSavedDevices() {
@@ -117,20 +119,16 @@ class SensorRepository(
     }
 
     private suspend fun connectWithRetry(deviceId: String, address: String? = null, maxRetries: Int = 3) {
+        if (address != null && isDeviceSystemConnected(address) && deviceId !in _connectedDeviceIds.value) {
+            _connectedDeviceIds.update { it + deviceId }
+            _deviceConnectionStates.update { it + (deviceId to ConnectionState.CONNECTED) }
+            return
+        }
         _deviceConnectionStates.update { it + (deviceId to ConnectionState.CONNECTING) }
         repeat(maxRetries) { attempt ->
             try {
                 api.connectToDevice(deviceId)
-                delay(2000)
-                if (deviceId in _connectedDeviceIds.value) return
-                if (address != null && isDeviceSystemConnected(address)) {
-                    _connectedDeviceIds.update { it + deviceId }
-                    _deviceConnectionStates.update { it + (deviceId to ConnectionState.CONNECTED) }
-                    return
-                }
-                if (attempt < maxRetries - 1) {
-                    Log.w(TAG, "Connection to $deviceId not confirmed on attempt $attempt, retrying...")
-                }
+                return
             } catch (e: Exception) {
                 if (attempt < maxRetries - 1) {
                     Log.w(TAG, "Retry $attempt for $deviceId: ${e.message}")
@@ -142,6 +140,7 @@ class SensorRepository(
         Log.e(TAG, "Could not reconnect to $deviceId after $maxRetries attempts")
     }
 
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     private fun isDeviceSystemConnected(address: String): Boolean {
         return try {
             val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
@@ -239,18 +238,20 @@ class SensorRepository(
     }
 
     private fun registerBleAclReceiver() {
-        val filter = IntentFilter(BluetoothDevice.ACTION_ACL_CONNECTED)
+        val filter = IntentFilter().apply {
+            addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
+            addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
+        }
         context.applicationContext.registerReceiver(bleAclReceiver, filter)
     }
 
     private val bleAclReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action == BluetoothDevice.ACTION_ACL_CONNECTED) {
-                val device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
-                device?.let {
-                    val macAddress = it.address ?: return@let
-                    handleSystemBleReconnection(macAddress)
-                }
+            val device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+            val macAddress = device?.address ?: return
+            when (intent.action) {
+                BluetoothDevice.ACTION_ACL_CONNECTED -> handleSystemBleReconnection(macAddress)
+                BluetoothDevice.ACTION_ACL_DISCONNECTED -> handleSystemBleDisconnection(macAddress)
             }
         }
     }
@@ -262,6 +263,47 @@ class SensorRepository(
             if (saved != null && saved.deviceId !in _connectedDeviceIds.value) {
                 Log.d(TAG, "System BLE reconnection detected for: ${saved.deviceId}")
                 connectWithRetry(saved.deviceId, saved.address)
+            }
+        }
+    }
+
+    private fun handleSystemBleDisconnection(macAddress: String) {
+        repositoryScope.launch @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT) {
+            val saved = dataSource.getSavedSensors().first().firstOrNull {
+                it.deviceId == macAddress || it.address == macAddress
+            }
+            if (saved == null || saved.deviceId !in _connectedDeviceIds.value) return@launch
+            delay(2000)
+            if (!isDeviceSystemConnected(saved.address)) {
+                Log.d(TAG, "System BLE disconnection confirmed for: ${saved.deviceId}")
+                _connectedDeviceIds.update { it - saved.deviceId }
+                _readyFeatures.update { it - saved.deviceId }
+                _availableStreamDataTypes.update { it - saved.deviceId }
+                _deviceConnectionStates.update { it - saved.deviceId }
+            }
+        }
+    }
+
+    private fun startHealthMonitor() {
+        healthMonitorJob?.cancel()
+        healthMonitorJob = repositoryScope.launch @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT) {
+            while (true) {
+                val connected = _connectedDeviceIds.value.toList()
+                if (connected.isNotEmpty()) {
+                    val savedDevices = dataSource.getSavedSensors().first()
+                    for (deviceId in connected) {
+                        val saved = savedDevices.firstOrNull { it.deviceId == deviceId }
+                        val address = saved?.address ?: continue
+                        if (!isDeviceSystemConnected(address)) {
+                            Log.d(TAG, "Health monitor: $deviceId no longer system-connected")
+                            _connectedDeviceIds.update { it - deviceId }
+                            _readyFeatures.update { it - deviceId }
+                            _availableStreamDataTypes.update { it - deviceId }
+                            _deviceConnectionStates.update { it - deviceId }
+                        }
+                    }
+                }
+                delay(30_000)
             }
         }
     }
