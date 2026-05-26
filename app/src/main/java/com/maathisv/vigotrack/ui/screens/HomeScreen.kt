@@ -46,6 +46,7 @@ fun HomeScreen(
     var showTimePicker by remember { mutableStateOf(false) }
 
     val connectionState by viewModel.connectionState.collectAsState()
+    val deviceConnectionStates by viewModel.deviceConnectionStates.collectAsState()
     val scannedDevices by viewModel.scannedDevices.collectAsState()
     val connectedDevicesList by viewModel.connectedDevicesList.collectAsState() // Get the list
     val connectingId by viewModel.isConnectingToId.collectAsState()
@@ -265,6 +266,7 @@ fun HomeScreen(
         ConnectionDialog(
             scannedDevices = scannedDevices,
             connectedDevicesList = connectedDevicesList,
+            deviceConnectionStates = deviceConnectionStates,
             connectingId = connectingId,
             patients = patients,
             currentLogUri = currentLogUri,

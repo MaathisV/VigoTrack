@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.maathisv.vigotrack.models.ConnectionState
 import com.maathisv.vigotrack.models.Patient
 import com.maathisv.vigotrack.models.Sensor
 
@@ -20,6 +21,7 @@ import com.maathisv.vigotrack.models.Sensor
 fun ConnectionDialog(
     scannedDevices: List<Sensor>,
     connectedDevicesList: List<String>,
+    deviceConnectionStates: Map<String, ConnectionState>,
     connectingId: String?,
     patients: List<Patient>,
     currentLogUri: String,
@@ -61,6 +63,7 @@ fun ConnectionDialog(
                 0 -> DeviceTab(
                     scannedDevices = scannedDevices,
                     connectedDevicesList = connectedDevicesList,
+                    deviceConnectionStates = deviceConnectionStates,
                     connectingId = connectingId,
                     onConnect = onConnect,
                     onDisconnect = onDisconnect
@@ -89,6 +92,7 @@ fun ConnectionDialog(
 private fun DeviceTab(
     scannedDevices: List<Sensor>,
     connectedDevicesList: List<String>,
+    deviceConnectionStates: Map<String, ConnectionState>,
     connectingId: String?,
     onConnect: (Sensor) -> Unit,
     onDisconnect: (String) -> Unit
@@ -108,12 +112,23 @@ private fun DeviceTab(
             )
         } else {
             Column {
-                    connectedDevicesList.forEach { id ->
-                        ListItem(
-                            headlineContent = { Text("Polar Device ($id)") },
+                connectedDevicesList.forEach { id ->
+                    val state = deviceConnectionStates[id]
+                    val isConnecting = state == ConnectionState.CONNECTING
+                    val stateSuffix = when (state) {
+                        ConnectionState.FEATURES_READY -> " (Ready)"
+                        ConnectionState.CONNECTING -> " (Connecting...)"
+                        else -> ""
+                    }
+                    ListItem(
+                        headlineContent = { Text("Polar Device ($id)$stateSuffix") },
                         trailingContent = {
-                            TextButton(onClick = { onDisconnect(id) }) {
-                                Text("Disconnect", color = MaterialTheme.colorScheme.error)
+                            if (isConnecting) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                            } else {
+                                TextButton(onClick = { onDisconnect(id) }) {
+                                    Text("Disconnect", color = MaterialTheme.colorScheme.error)
+                                }
                             }
                         }
                     )

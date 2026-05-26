@@ -31,6 +31,7 @@ class HomeViewModel(
 ) : AndroidViewModel(application) {
 
     val connectionState = sensorRepo.connectionState
+    val deviceConnectionStates = sensorRepo.deviceConnectionStates
     val activities = activityRepo.allActivities
     val sensorLiveData = sensorRepo.liveData
 

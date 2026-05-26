@@ -1,6 +1,12 @@
 package com.maathisv.vigotrack.repository
 
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothProfile
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.util.Log
 import com.maathisv.vigotrack.data.SensorDataSource
 import com.maathisv.vigotrack.models.ActivitySession
@@ -51,8 +57,19 @@ class SensorRepository(
         )
     }
 
-    private val _connectionState = MutableStateFlow(ConnectionState.NOT_CONNECTED)
-    val connectionState: StateFlow<ConnectionState> = _connectionState.asStateFlow()
+    private val _deviceConnectionStates = MutableStateFlow<Map<String, ConnectionState>>(emptyMap())
+    val deviceConnectionStates: StateFlow<Map<String, ConnectionState>> = _deviceConnectionStates.asStateFlow()
+
+    val connectionState: StateFlow<ConnectionState> = _deviceConnectionStates
+        .map { states ->
+            when {
+                states.any { it.value == ConnectionState.FEATURES_READY } -> ConnectionState.FEATURES_READY
+                states.any { it.value == ConnectionState.CONNECTED } -> ConnectionState.CONNECTED
+                states.any { it.value == ConnectionState.CONNECTING } -> ConnectionState.CONNECTING
+                else -> ConnectionState.NOT_CONNECTED
+            }
+        }
+        .stateIn(repositoryScope, SharingStarted.Eagerly, ConnectionState.NOT_CONNECTED)
 
     private val _connectedDeviceIds = MutableStateFlow<Set<String>>(emptySet())
     val connectedDeviceIds: StateFlow<Set<String>> = _connectedDeviceIds.asStateFlow()
@@ -85,6 +102,7 @@ class SensorRepository(
     init {
         setupPolarCallbacks()
         autoReconnectToSavedDevices()
+        registerBleAclReceiver()
     }
 
     private fun autoReconnectToSavedDevices() {
@@ -92,20 +110,27 @@ class SensorRepository(
             // delay(5000)
             dataSource.getSavedSensors().first().forEach { saved ->
                 Log.d(TAG, "Auto-reconnecting to saved device: ${saved.deviceId} (${saved.name})")
-                connectWithRetry(saved.deviceId)
+                connectWithRetry(saved.deviceId, saved.address)
                 delay(5000)
             }
         }
     }
 
-    private suspend fun connectWithRetry(deviceId: String, maxRetries: Int = 3) {
-        _connectionState.value = ConnectionState.CONNECTING
+    private suspend fun connectWithRetry(deviceId: String, address: String? = null, maxRetries: Int = 3) {
+        _deviceConnectionStates.update { it + (deviceId to ConnectionState.CONNECTING) }
         repeat(maxRetries) { attempt ->
             try {
                 api.connectToDevice(deviceId)
-                _connectedDeviceIds.update { it + deviceId }
-                _connectionState.value = ConnectionState.CONNECTED
-                return
+                delay(2000)
+                if (deviceId in _connectedDeviceIds.value) return
+                if (address != null && isDeviceSystemConnected(address)) {
+                    _connectedDeviceIds.update { it + deviceId }
+                    _deviceConnectionStates.update { it + (deviceId to ConnectionState.CONNECTED) }
+                    return
+                }
+                if (attempt < maxRetries - 1) {
+                    Log.w(TAG, "Connection to $deviceId not confirmed on attempt $attempt, retrying...")
+                }
             } catch (e: Exception) {
                 if (attempt < maxRetries - 1) {
                     Log.w(TAG, "Retry $attempt for $deviceId: ${e.message}")
@@ -113,8 +138,19 @@ class SensorRepository(
                 }
             }
         }
-        _connectionState.value = ConnectionState.NOT_CONNECTED
+        _deviceConnectionStates.update { it + (deviceId to ConnectionState.NOT_CONNECTED) }
         Log.e(TAG, "Could not reconnect to $deviceId after $maxRetries attempts")
+    }
+
+    private fun isDeviceSystemConnected(address: String): Boolean {
+        return try {
+            val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+            val adapter = bluetoothManager.adapter ?: return false
+            val device = adapter.getRemoteDevice(address)
+            bluetoothManager.getConnectionState(device, BluetoothProfile.GATT) == BluetoothProfile.STATE_CONNECTED
+        } catch (e: Exception) {
+            false
+        }
     }
 
     private fun setupPolarCallbacks() {
@@ -124,14 +160,14 @@ class SensorRepository(
             }
 
             override fun deviceConnecting(polarDeviceInfo: PolarDeviceInfo) {
-                _connectionState.value = ConnectionState.CONNECTING
+                _deviceConnectionStates.update { it + (polarDeviceInfo.deviceId to ConnectionState.CONNECTING) }
                 Log.d("VigoTrack", "Connecting to: ${polarDeviceInfo.deviceId}")
             }
 
             override fun deviceConnected(polarDeviceInfo: PolarDeviceInfo) {
                 Log.d(TAG, "Connected to ${polarDeviceInfo.deviceId}")
                 _connectedDeviceIds.update { it + polarDeviceInfo.deviceId }
-                _connectionState.value = ConnectionState.CONNECTED
+                _deviceConnectionStates.update { it + (polarDeviceInfo.deviceId to ConnectionState.CONNECTED) }
 
                 repositoryScope.launch {
                     dataSource.saveSensor(
@@ -149,9 +185,7 @@ class SensorRepository(
                 _connectedDeviceIds.update { it - polarDeviceInfo.deviceId }
                 _readyFeatures.update { it - polarDeviceInfo.deviceId }
                 _availableStreamDataTypes.update { it - polarDeviceInfo.deviceId }
-                if (_connectedDeviceIds.value.isEmpty()) {
-                    _connectionState.value = ConnectionState.NOT_CONNECTED
-                }
+                _deviceConnectionStates.update { it - polarDeviceInfo.deviceId }
             }
 
             override fun bleSdkFeatureReady(identifier: String, feature: PolarBleApi.PolarBleSdkFeature) {
@@ -204,6 +238,33 @@ class SensorRepository(
         })
     }
 
+    private fun registerBleAclReceiver() {
+        val filter = IntentFilter(BluetoothDevice.ACTION_ACL_CONNECTED)
+        context.applicationContext.registerReceiver(bleAclReceiver, filter)
+    }
+
+    private val bleAclReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == BluetoothDevice.ACTION_ACL_CONNECTED) {
+                val device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+                device?.let {
+                    val macAddress = it.address ?: return@let
+                    handleSystemBleReconnection(macAddress)
+                }
+            }
+        }
+    }
+
+    private fun handleSystemBleReconnection(macAddress: String) {
+        repositoryScope.launch {
+            val knownDevices = dataSource.getSavedSensors().first()
+            val saved = knownDevices.firstOrNull { it.deviceId == macAddress || it.address == macAddress }
+            if (saved != null && saved.deviceId !in _connectedDeviceIds.value) {
+                Log.d(TAG, "System BLE reconnection detected for: ${saved.deviceId}")
+                connectWithRetry(saved.deviceId, saved.address)
+            }
+        }
+    }
 
     fun startScanning() {
         _discoveredDevices.value = emptySet()
@@ -244,12 +305,12 @@ class SensorRepository(
             return
         }
         Log.d(TAG, "Connecting to: $identifier")
-        _connectionState.value = ConnectionState.CONNECTING
+        _deviceConnectionStates.update { it + (identifier to ConnectionState.CONNECTING) }
         try {
             api.connectToDevice(identifier)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to connect to $identifier", e)
-            _connectionState.value = ConnectionState.NOT_CONNECTED
+            _deviceConnectionStates.update { it + (identifier to ConnectionState.NOT_CONNECTED) }
         }
     }
 
