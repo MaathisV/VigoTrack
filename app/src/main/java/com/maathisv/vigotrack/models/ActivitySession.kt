@@ -4,7 +4,7 @@ import java.util.UUID
 
 data class ActivitySession(
     val id: String = UUID.randomUUID().toString(),
-    val name: String,
+    val activityType: ActivityType,
     val links: List<ActivityLink> = emptyList(),
     val scheduledDate: Long,
     val startTime: Long? = null,
@@ -20,9 +20,9 @@ data class ActivitySession(
         }
 
     data class ActivityLink(
-        val patientId: String,
+        val patientId: Long?,
+        val patientName: String,
         val sensorId: String,
-        val patientName: String = "Unknown",
         val featuresToTrack: List<String> = emptyList()
     ) {
         // UI Helpers: The screen is looking for these booleans

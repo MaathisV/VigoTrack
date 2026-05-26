@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+
 import com.maathisv.vigotrack.data.dao.*
 import com.maathisv.vigotrack.data.entities.*
 
@@ -11,14 +12,16 @@ import com.maathisv.vigotrack.data.entities.*
     entities = [
         SensorEntity::class,
         ActivitySessionEntity::class,
-        ActivityLinkEntity::class
+        ActivityLinkEntity::class,
+        PatientEntity::class
     ],
-    version = 1
+    version = 4
 )
 
 abstract class VigoTrackDatabase : RoomDatabase() {
     abstract fun sensorDao(): SensorDao
     abstract fun activityDao(): ActivityDao
+    abstract fun patientDao(): PatientDao
 
     companion object {
         @Volatile
@@ -27,10 +30,10 @@ abstract class VigoTrackDatabase : RoomDatabase() {
         fun getDatabase(context: Context): VigoTrackDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
-                    context.applicationContext,
-                    VigoTrackDatabase::class.java,
-                    "vigo_track_database"
-                ).fallbackToDestructiveMigration(true).build() // WILL DELETE ALL DATA IF SCHEMA CHANGE !
+                                context.applicationContext,
+                                VigoTrackDatabase::class.java,
+                                "vigo_track_database"
+                            ).fallbackToDestructiveMigration(true).build()
                 INSTANCE = instance
                 instance
             }

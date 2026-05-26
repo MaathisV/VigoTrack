@@ -15,7 +15,7 @@ import androidx.room.PrimaryKey
 )
 data class ActivitySessionEntity(
     @PrimaryKey val id: String,
-    val name: String,
+    val activityType: String,
     val scheduledDate: Long,
     val startTime: Long? = null,
     val endTime: Long? = null,
