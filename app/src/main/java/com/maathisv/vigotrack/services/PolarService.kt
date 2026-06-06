@@ -16,14 +16,21 @@ import com.polar.sdk.api.model.PolarEcgData
 import com.polar.sdk.api.model.PolarHrData
 import kotlinx.coroutines.launch
 import androidx.core.net.toUri
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 const val ACTION_START_STREAMS = "com.maathisv.vigotrack.START_STREAMS"
 const val ACTION_STOP_STREAMS = "com.maathisv.vigotrack.STOP_STREAMS"
+const val ACTION_UPDATE_ACTIVITY = "com.maathisv.vigotrack.UPDATE_ACTIVITY"
 const val EXTRA_SENSOR_IDS = "extra_sensor_ids"
 const val EXTRA_ACTIVITY_NAME = "extra_activity_name"
+const val EXTRA_ACTIVITY_CATEGORY = "extra_activity_category"
 const val EXTRA_PATIENT_NAME = "extra_patient_name"
+const val EXTRA_STAGE_NAME = "extra_stage_name"
+const val EXTRA_SESSION_DATE = "extra_session_date"
 
-const val DEFAULT_TEMPLATE = "{date}_{activity}_{patient}_{device}_{tag}"
+const val DEFAULT_TEMPLATE = "{stage}/{patient}/{category}/{activity}_{datetime}/{sensor}_{tag}"
 
 class PolarService : LifecycleService() {
     private val loggers = mutableMapOf<String, DataLogger>()
@@ -42,7 +49,16 @@ class PolarService : LifecycleService() {
             ACTION_START_STREAMS -> {
                 val sensorIds = intent.getStringArrayExtra(EXTRA_SENSOR_IDS) ?: return START_STICKY
                 val activityName = intent.getStringExtra(EXTRA_ACTIVITY_NAME) ?: ""
+                val activityCategory = intent.getStringExtra(EXTRA_ACTIVITY_CATEGORY) ?: ""
                 val patientName = intent.getStringExtra(EXTRA_PATIENT_NAME) ?: ""
+                val stageName = intent.getStringExtra(EXTRA_STAGE_NAME) ?: "NoStage"
+                val sessionDate = intent.getLongExtra(EXTRA_SESSION_DATE, System.currentTimeMillis())
+
+                val sdfDate = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+                val sdfTime = SimpleDateFormat("HH-mm-ss", Locale.US)
+                val dateStr = sdfDate.format(Date(sessionDate))
+                val timeStr = sdfTime.format(Date(sessionDate))
+
                 val prefs = getSharedPreferences("vigo_prefs", MODE_PRIVATE)
                 val uriString = prefs.getString("log_uri", null)
                 val template = prefs.getString("file_naming_template", null) ?: DEFAULT_TEMPLATE
@@ -50,11 +66,20 @@ class PolarService : LifecycleService() {
                 if (uriString != null) {
                     startForeground(NOTIFICATION_ID, createNotification())
                     sensorIds.forEach { sensorId ->
+                        val staticValues = mapOf(
+                            "stage" to stageName,
+                            "patient" to patientName,
+                            "category" to activityCategory,
+                            "activity" to activityName,
+                            "device" to sensorId,
+                            "sensor" to sensorId,
+                            "date" to dateStr,
+                            "time" to timeStr,
+                            "datetime" to "${dateStr}_${timeStr}",
+                            "timestamp" to sessionDate.toString()
+                        )
                         loggers[sensorId] = DataLogger(
-                            applicationContext, uriString.toUri(), sensorId,
-                            namingTemplate = template,
-                            activityName = activityName,
-                            patientName = patientName
+                            applicationContext, uriString.toUri(), template, staticValues
                         )
                     }
                     observeSensorData()

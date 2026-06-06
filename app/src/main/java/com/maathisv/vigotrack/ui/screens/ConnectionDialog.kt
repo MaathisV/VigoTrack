@@ -288,7 +288,7 @@ private fun SettingsTab(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "Data files are saved to the selected folder.",
+            text = "Data files are saved to the selected folder. Use \"/\" in the template to create subfolders.",
             style = MaterialTheme.typography.bodySmall
         )
 
@@ -345,14 +345,20 @@ private fun SettingsTab(
             title = { Text("Available Placeholders") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("{activity} - Activity type (e.g. MARCHE)")
+                    Text("{stage} - Stage name")
                     Text("{patient} - Patient name")
-                    Text("{device} - Device identifier")
-                    Text("{tag} - Data stream (HR, PPI, ACC, ECG)")
+                    Text("{category} - Activity category (BILAN / ACTIVITE)")
+                    Text("{activity} - Activity type (e.g. MARCHE, TDM6)")
+                    Text("{sensor} - Sensor identifier")
+                    Text("{device} - Alias for {sensor}")
+                    Text("{tag} - Data stream type (HR, PPI, ACC, ECG)")
                     Text("{date} - Date (YYYY-MM-DD)")
                     Text("{time} - Time (HH-MM-SS)")
                     Text("{datetime} - Combined date_time")
                     Text("{timestamp} - Unix epoch ms")
+                    Text("")
+                    Text("Use / in your template to create folder levels.")
+                    Text("Default: {stage}/{patient}/{category}/{activity}_{datetime}/{sensor}_{tag}")
                 }
             },
             confirmButton = {
