@@ -39,11 +39,12 @@ fun ActivitySessionScreen(
 
     LaunchedEffect(activityId) {
         activity?.links?.forEach { link ->
-            checkedSensorIds[link.sensorId] = true
+            checkedSensorIds["${link.sensorId}_${link.patientId}"] = true
         }
         preLinks.forEach { preLink ->
-            if (!checkedSensorIds.containsKey(preLink.sensorId)) {
-                checkedSensorIds[preLink.sensorId] = true
+            val key = "${preLink.sensorId}_${preLink.patientId}"
+            if (!checkedSensorIds.containsKey(key)) {
+                checkedSensorIds[key] = true
             }
         }
     }
@@ -106,15 +107,16 @@ fun ActivitySessionScreen(
                     if (displayLinks.isEmpty()) {
                         item { Text("No patients linked. Configure a sensor below.", style = MaterialTheme.typography.bodySmall) }
                     } else {
-                        items(displayLinks, key = { it.sensorId }) { displayItem ->
-                            val isChecked = checkedSensorIds[displayItem.sensorId] ?: false
+                        items(displayLinks, key = { "${it.sensorId}_${it.patientId}" }) { displayItem ->
+                            val itemKey = "${displayItem.sensorId}_${displayItem.patientId}"
+                            val isChecked = checkedSensorIds[itemKey] ?: false
                             PatientCheckboxRow(
                                 displayItem = displayItem,
                                 isChecked = isChecked,
                                 onCheckedChange = { checked ->
-                                    checkedSensorIds[displayItem.sensorId] = checked
+                                    checkedSensorIds[itemKey] = checked
                                     if (checked) {
-                                        val alreadyLinked = activity.links.any { it.sensorId == displayItem.sensorId }
+                                        val alreadyLinked = activity.links.any { it.sensorId == displayItem.sensorId && it.patientId == displayItem.patientId }
                                         if (!alreadyLinked) {
                                             homeViewModel.addLink(
                                                 activityId,
@@ -129,19 +131,19 @@ fun ActivitySessionScreen(
                                         }
                                     } else {
                                         homeViewModel.stopPatientStream(displayItem.sensorId)
-                                        homeViewModel.removeLink(activityId, displayItem.sensorId)
+                                        homeViewModel.removeLink(activityId, displayItem.sensorId, displayItem.patientId)
                                     }
                                 }
                             )
                         }
                     }
 
-                    item { StartStopControls(activity, homeViewModel, checkedSensorIds.keys) }
+                    item { StartStopControls(activity, homeViewModel, checkedSensorIds.keys.map { it.substringBefore("_") }.toSet()) }
                 }
 
                 if (activity.status != ActivityStatus.SCHEDULED) {
                     item { Text("Live Data", style = MaterialTheme.typography.titleMedium) }
-                    val activeLinks = activity.links.filter { checkedSensorIds[it.sensorId] == true }
+                    val activeLinks = activity.links.filter { checkedSensorIds["${it.sensorId}_${it.patientId}"] == true }
                     if (activeLinks.isEmpty()) {
                         item { Text("No active sensors.", style = MaterialTheme.typography.bodySmall) }
                     } else {

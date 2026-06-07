@@ -28,8 +28,9 @@ data class ActivitySession(
     ) {
         // UI Helpers: The screen is looking for these booleans
         val streamHR: Boolean get() = featuresToTrack.contains("HR")
-        val streamECG: Boolean get() = featuresToTrack.contains("ECG")
+        val streamPPI: Boolean get() = featuresToTrack.contains("PPI")
         val streamACC: Boolean get() = featuresToTrack.contains("ACC")
+        val streamECG: Boolean get() = featuresToTrack.contains("ECG")
     }
 }
 

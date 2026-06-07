@@ -198,9 +198,9 @@ class HomeViewModel(
         }
     }
 
-    fun removeLink(activityId: String, sensorId: String) {
+    fun removeLink(activityId: String, sensorId: String, patientId: Long?) {
         viewModelScope.launch(Dispatchers.IO) {
-            activityRepo.removeLinkFromActivity(activityId, sensorId)
+            activityRepo.removeLinkFromActivity(activityId, sensorId, patientId)
         }
     }
 
@@ -216,9 +216,11 @@ class HomeViewModel(
                 intent.action = ACTION_STOP_STREAMS
                 getApplication<Application>().startService(intent)
             } else {
-                val existingSensorIds = activity.links.map { it.sensorId }.toSet()
+                val existingLinks = activity.links.map { it.sensorId to it.patientId }.toSet()
+                val allActiveLinks = activity.links.toMutableList()
+
                 sensorPatientLinks.value
-                    .filter { it.sensorId in checkedSensorIds && it.sensorId !in existingSensorIds }
+                    .filter { it.sensorId in checkedSensorIds && (it.sensorId to it.patientId) !in existingLinks }
                     .forEach { link ->
                         val patientName = patients.value.find { it.id == link.patientId }?.name ?: "Unknown"
                         val finalPatientId = link.patientId ?: patientDataSource.insertPatient(Patient(name = patientName))
@@ -229,13 +231,16 @@ class HomeViewModel(
                             featuresToTrack = link.features
                         )
                         activityRepo.addLinkToActivity(activity.id, newLink)
+                        allActiveLinks.add(newLink)
                     }
 
                 activityRepo.startActivity(activity)
-                sensorRepo.startActivityStreaming(activity)
 
-                val sensorIds = activity.links.map { it.sensorId }.toTypedArray()
-                val firstLink = activity.links.firstOrNull()
+                val updatedActivity = activity.copy(links = allActiveLinks)
+                sensorRepo.startActivityStreaming(updatedActivity)
+
+                val sensorIds = allActiveLinks.map { it.sensorId }.toTypedArray()
+                val firstLink = allActiveLinks.firstOrNull()
                 val stageName = activity.stageId?.let { id ->
                     stages.value.find { it.id == id }?.name
                 } ?: "NoStage"
