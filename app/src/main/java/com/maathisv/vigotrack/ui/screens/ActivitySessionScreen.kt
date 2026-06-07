@@ -7,12 +7,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.maathisv.vigotrack.models.*
 import com.maathisv.vigotrack.ui.components.AppTopBar
+import com.maathisv.vigotrack.ui.components.MiniGraph
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.sqrt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -149,7 +152,11 @@ fun ActivitySessionScreen(
                     } else {
                         items(activeLinks) { link ->
                             val sensorName = connectedSensors.find { it.deviceId == link.sensorId }?.effectiveName
-                            SensorDataCard(link = link, sensorName = sensorName, homeViewModel = homeViewModel)
+                            SensorDataCard(
+                                link = link,
+                                sensorName = sensorName,
+                                sensorData = allLiveData[link.sensorId]
+                            )
                         }
                     }
                 }
@@ -264,15 +271,82 @@ private fun PatientCheckboxRow(
     }
 }
 
+private data class FeatureData(
+    val label: String,
+    val valueText: String,
+    val unit: String,
+    val valueColor: Color,
+    val graphValue: Float?,
+    val graphColor: Color,
+    val maxPoints: Int = 100
+)
+
+@Composable
+private fun FeatureCell(data: FeatureData, modifier: Modifier) {
+    Row(
+        modifier = modifier.height(IntrinsicSize.Min),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.width(70.dp)) {
+            Text(data.label, style = MaterialTheme.typography.labelSmall)
+            Text(
+                text = data.valueText,
+                style = MaterialTheme.typography.titleLarge,
+                color = data.valueColor
+            )
+            Text(data.unit, style = MaterialTheme.typography.labelSmall)
+        }
+        MiniGraph(
+            currentValue = data.graphValue,
+            lineColor = data.graphColor,
+            maxPoints = data.maxPoints,
+            modifier = Modifier.weight(1f).height(36.dp)
+        )
+    }
+}
+
 @Composable
 fun SensorDataCard(
     link: ActivitySession.ActivityLink,
     sensorName: String? = null,
-    homeViewModel: HomeViewModel
+    sensorData: Map<String, Any>?,
+    columns: Int = 2
 ) {
-    val allLiveData by homeViewModel.sensorLiveData.collectAsState()
+    val hrValue = (sensorData?.get("HR") as? Number)?.toFloat()
+    val ppiValue = (sensorData?.get("PPI") as? Number)?.toFloat()
+    val ecgValue = (sensorData?.get("ECG") as? Number)?.toFloat()
 
-    val sensorData = allLiveData[link.sensorId]
+    val accX = (sensorData?.get("ACC_X") as? Number)?.toFloat() ?: 0f
+    val accY = (sensorData?.get("ACC_Y") as? Number)?.toFloat() ?: 0f
+    val accZ = (sensorData?.get("ACC_Z") as? Number)?.toFloat() ?: 0f
+    val accMagnitude = sqrt(accX * accX + accY * accY + accZ * accZ)
+
+    val features = listOfNotNull(
+        if (link.streamHR) FeatureData(
+            label = "HR", valueText = "${hrValue?.toInt() ?: "--"}", unit = "bpm",
+            valueColor = MaterialTheme.colorScheme.primary,
+            graphValue = hrValue, graphColor = MaterialTheme.colorScheme.primary
+        ) else null,
+        if (link.streamPPI) FeatureData(
+            label = "PPI", valueText = "${ppiValue?.toInt() ?: "--"}", unit = "ms",
+            valueColor = MaterialTheme.colorScheme.onSurface,
+            graphValue = ppiValue, graphColor = MaterialTheme.colorScheme.secondary
+        ) else null,
+        if (link.streamACC) FeatureData(
+            label = "ACC", valueText = "%.1f".format(accMagnitude), unit = "m/s²",
+            valueColor = MaterialTheme.colorScheme.onSurface,
+            graphValue = if (accMagnitude > 0f) accMagnitude else null,
+            graphColor = MaterialTheme.colorScheme.tertiary
+        ) else null,
+        if (link.streamECG) FeatureData(
+            label = "ECG", valueText = "${ecgValue?.toInt() ?: "--"}", unit = "uV",
+            valueColor = MaterialTheme.colorScheme.error,
+            graphValue = ecgValue, graphColor = MaterialTheme.colorScheme.error,
+            maxPoints = 200
+        ) else null
+    )
+
+    val rows = features.chunked(columns)
 
     Card(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -284,47 +358,15 @@ fun SensorDataCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("HR", style = MaterialTheme.typography.labelSmall)
-                    Text(
-                        text = "${sensorData?.get("HR") ?: "--"}",
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Text("bpm", style = MaterialTheme.typography.labelSmall)
-                }
-
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("PPI", style = MaterialTheme.typography.labelSmall)
-                    Text(
-                        text = "${sensorData?.get("PPI") ?: "--"}",
-                        style = MaterialTheme.typography.headlineSmall
-                    )
-                    Text("ms", style = MaterialTheme.typography.labelSmall)
-                }
-
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("ACC (X,Y,Z)", style = MaterialTheme.typography.labelSmall)
-                    val x = sensorData?.get("ACC_X") ?: "0"
-                    val y = sensorData?.get("ACC_Y") ?: "0"
-                    val z = sensorData?.get("ACC_Z") ?: "0"
-                    Text(text = "$x", style = MaterialTheme.typography.bodyMedium)
-                    Text(text = "$y", style = MaterialTheme.typography.bodyMedium)
-                    Text(text = "$z", style = MaterialTheme.typography.bodyMedium)
-                }
-
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("ECG", style = MaterialTheme.typography.labelSmall)
-                    Text(
-                        text = "${sensorData?.get("ECG") ?: "--"}",
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.tertiary
-                    )
-                    Text("uV", style = MaterialTheme.typography.labelSmall)
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                rows.forEach { row ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        row.forEach { f -> FeatureCell(f, Modifier.weight(1f)) }
+                        repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                    }
                 }
             }
         }

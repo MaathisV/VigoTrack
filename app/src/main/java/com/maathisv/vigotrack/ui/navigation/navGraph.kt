@@ -5,7 +5,6 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.maathisv.vigotrack.ui.screens.ActivitySessionScreen
 import com.maathisv.vigotrack.ui.screens.BilanScreen
@@ -28,7 +27,7 @@ sealed class NavRoutes(val route: String) {
 
 @Composable
 fun VigoTrackNavGraph(
-    navController: NavHostController = rememberNavController(),
+    navController: NavHostController,
     homeViewModel: HomeViewModel
 ) {
     NavHost(

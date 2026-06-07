@@ -13,6 +13,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.maathisv.vigotrack.services.PolarService
+import androidx.navigation.compose.rememberNavController
 import com.maathisv.vigotrack.ui.navigation.VigoTrackNavGraph
 import com.maathisv.vigotrack.ui.screens.HomeViewModel
 import com.maathisv.vigotrack.ui.theme.VigoTrackTheme
@@ -88,7 +89,8 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             VigoTrackTheme {
-                VigoTrackNavGraph(homeViewModel = viewModel)
+                val navController = rememberNavController()
+                VigoTrackNavGraph(navController = navController, homeViewModel = viewModel)
             }
         }
     }
