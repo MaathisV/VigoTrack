@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.ViewModelProvider
@@ -14,6 +15,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.maathisv.vigotrack.services.PolarService
 import com.maathisv.vigotrack.ui.navigation.VigoTrackNavGraph
 import com.maathisv.vigotrack.ui.screens.HomeViewModel
+import com.maathisv.vigotrack.ui.theme.VigoTrackTheme
 import androidx.core.content.edit
 
 class MainActivity : ComponentActivity() {
@@ -57,6 +59,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
 
         val app = application as VigoTrackApplication
 
@@ -84,7 +87,9 @@ class MainActivity : ComponentActivity() {
         permissionLauncher.launch(requiredPermissions)
 
         setContent {
-            VigoTrackNavGraph(homeViewModel = viewModel)
+            VigoTrackTheme {
+                VigoTrackNavGraph(homeViewModel = viewModel)
+            }
         }
     }
 

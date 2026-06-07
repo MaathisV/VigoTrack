@@ -3,14 +3,13 @@ package com.maathisv.vigotrack.ui.screens
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.maathisv.vigotrack.models.*
+import com.maathisv.vigotrack.ui.components.AppTopBar
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -30,7 +29,6 @@ fun ActivitySessionScreen(
     val patients by homeViewModel.patients.collectAsState()
 
     val activity = allActivities.find { it.id == activityId }
-    var showLinkModal by remember { mutableStateOf(false) }
 
     val bilanTypes = ActivityType.entries.filter { it.category == ActivityCategory.BILAN }
     val activiteTypes = ActivityType.entries.filter { it.category == ActivityCategory.ACTIVITE }
@@ -52,16 +50,10 @@ fun ActivitySessionScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        if (activity?.isRunning == true) "En cours"
-                        else currentType?.displayName ?: "Session"
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) { Text("<") }
-                }
+            AppTopBar(
+                title = if (activity?.isRunning == true) "En cours"
+                        else currentType?.displayName ?: "Session",
+                onBack = onBack
             )
         }
     ) { padding ->
@@ -144,13 +136,6 @@ fun ActivitySessionScreen(
                         }
                     }
 
-                    item {
-                        Button(
-                            onClick = { showLinkModal = true },
-                            modifier = Modifier.fillMaxWidth()
-                        ) { Text("Configure New Sensor") }
-                    }
-
                     item { StartStopControls(activity, homeViewModel, checkedSensorIds.keys) }
                 }
 
@@ -168,23 +153,6 @@ fun ActivitySessionScreen(
                 }
             }
         }
-    }
-
-    if (showLinkModal) {
-        LinkConfigurationModal(
-            activityId = activityId,
-            patients = patients,
-            homeViewModel = homeViewModel,
-            onDismiss = { showLinkModal = false },
-            onSave = { patientId, patientName, sensorId, features ->
-                homeViewModel.addLink(activityId, patientId, patientName, sensorId, features)
-                checkedSensorIds[sensorId] = true
-                if (activity?.isRunning == true) {
-                    homeViewModel.startPatientStream(sensorId, features)
-                }
-                showLinkModal = false
-            }
-        )
     }
 }
 
@@ -357,170 +325,6 @@ fun SensorDataCard(
                     Text("uV", style = MaterialTheme.typography.labelSmall)
                 }
             }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun LinkConfigurationModal(
-    activityId: String,
-    patients: List<Patient>,
-    homeViewModel: HomeViewModel,
-    onDismiss: () -> Unit,
-    onSave: (Long?, String, String, List<String>) -> Unit
-) {
-    var patientName by remember { mutableStateOf("") }
-    var selectedPatientId by remember { mutableStateOf<Long?>(null) }
-    var patientDropdownExpanded by remember { mutableStateOf(false) }
-
-    val connectedSensors by homeViewModel.connectedDevicesList.collectAsState()
-    var selectedSensorId by remember { mutableStateOf("") }
-    var sensorDropdownExpanded by remember { mutableStateOf(false) }
-
-    var hrEnabled by remember { mutableStateOf(true) }
-    var ppiEnabled by remember { mutableStateOf(true) }
-    var accEnabled by remember { mutableStateOf(true) }
-    var ecgEnabled by remember { mutableStateOf(false) }
-
-    val availableFeatures = remember(selectedSensorId) {
-        if (selectedSensorId.isNotBlank()) {
-            homeViewModel.getAvailableFeaturesForDevice(selectedSensorId)
-        } else {
-            emptySet()
-        }
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Configure Sensor Link") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                ExposedDropdownMenuBox(
-                    expanded = patientDropdownExpanded,
-                    onExpandedChange = { patientDropdownExpanded = it }
-                ) {
-                    OutlinedTextField(
-                        value = patientName,
-                        onValueChange = {
-                            patientName = it
-                            selectedPatientId = null
-                            patientDropdownExpanded = true
-                        },
-                        label = { Text("Patient Name") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = patientDropdownExpanded) },
-                        modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryEditable, enabled = true).fillMaxWidth()
-                    )
-
-                    ExposedDropdownMenu(
-                        expanded = patientDropdownExpanded,
-                        onDismissRequest = { patientDropdownExpanded = false }
-                    ) {
-                        if (patients.isEmpty()) {
-                            DropdownMenuItem(
-                                text = { Text("No patients saved yet") },
-                                onClick = { patientDropdownExpanded = false }
-                            )
-                        } else {
-                            patients.forEach { patient ->
-                                DropdownMenuItem(
-                                    text = { Text(patient.name) },
-                                    onClick = {
-                                        patientName = patient.name
-                                        selectedPatientId = patient.id
-                                        patientDropdownExpanded = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
-
-                ExposedDropdownMenuBox(
-                    expanded = sensorDropdownExpanded,
-                    onExpandedChange = { sensorDropdownExpanded = it }
-                ) {
-                    val selectedSensorName = connectedSensors.find { it.deviceId == selectedSensorId }?.effectiveName ?: selectedSensorId
-                    OutlinedTextField(
-                        value = selectedSensorName.ifEmpty { "Select a connected sensor" },
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Available Sensors") },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = sensorDropdownExpanded) },
-                        modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true).fillMaxWidth()
-                    )
-
-                    ExposedDropdownMenu(
-                        expanded = sensorDropdownExpanded,
-                        onDismissRequest = { sensorDropdownExpanded = false }
-                    ) {
-                        if (connectedSensors.isEmpty()) {
-                            DropdownMenuItem(
-                                text = { Text("No sensors found. Connect in Home first.") },
-                                onClick = { sensorDropdownExpanded = false }
-                            )
-                        } else {
-                            connectedSensors.forEach { sensor ->
-                                DropdownMenuItem(
-                                    text = { Text(sensor.effectiveName) },
-                                    onClick = {
-                                        selectedSensorId = sensor.deviceId
-                                        sensorDropdownExpanded = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Text("Features", style = MaterialTheme.typography.labelSmall)
-                if (availableFeatures.isNotEmpty()) {
-                    Text("Device supports: ${availableFeatures.joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
-                }
-                Spacer(modifier = Modifier.height(4.dp))
-                Column {
-                    FeatureCheckbox("Heart Rate (HR)", hrEnabled, enabled = availableFeatures.contains("HR")) { hrEnabled = it }
-                    FeatureCheckbox("PP Interval (PPI)", ppiEnabled, enabled = availableFeatures.contains("PPI")) { ppiEnabled = it }
-                    FeatureCheckbox("Accelerometer (ACC)", accEnabled, enabled = availableFeatures.contains("ACC")) { accEnabled = it }
-                    FeatureCheckbox("ECG", ecgEnabled, enabled = availableFeatures.contains("ECG")) { ecgEnabled = it }
-                }
-
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    val features = mutableListOf<String>()
-                    if (hrEnabled) features.add("HR")
-                    if (ppiEnabled) features.add("PPI")
-                    if (accEnabled) features.add("ACC")
-                    if (ecgEnabled) features.add("ECG")
-                    onSave(selectedPatientId, patientName, selectedSensorId, features)
-                },
-                enabled = selectedSensorId.isNotBlank() && patientName.isNotBlank()
-            ) { Text("Link") }
-        }
-    )
-}
-
-@Composable
-fun FeatureCheckbox(label: String, isChecked: Boolean, enabled: Boolean = true, onCheckedChange: (Boolean) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Checkbox(checked = isChecked && enabled, onCheckedChange = { if (enabled) onCheckedChange(it) }, enabled = enabled)
-        Text(label, color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f))
-    }
-}
-
-@Composable
-fun SensorLinkCard(link: ActivitySession.ActivityLink, sensorName: String? = null) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text("Patient: ${link.patientName}", style = MaterialTheme.typography.bodyLarge)
-            Text("Sensor: ${sensorName ?: link.sensorId}", style = MaterialTheme.typography.bodySmall)
-            Text("Features: ${link.featuresToTrack.joinToString(", ")}", style = MaterialTheme.typography.labelSmall)
         }
     }
 }

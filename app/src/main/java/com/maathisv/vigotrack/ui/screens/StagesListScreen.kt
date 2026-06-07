@@ -10,7 +10,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -18,6 +17,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.maathisv.vigotrack.models.ConnectionState
 import com.maathisv.vigotrack.models.Stage
+import com.maathisv.vigotrack.ui.components.AppTopBar
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -74,16 +74,9 @@ fun StagesListScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Stages") },
-                actions = {
-                    IconButton(onClick = { showConnectionDialog = true }) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Device Management"
-                        )
-                    }
-                }
+            AppTopBar(
+                title = "Stages",
+                onSettingsClick = { showConnectionDialog = true }
             )
         },
         floatingActionButton = {

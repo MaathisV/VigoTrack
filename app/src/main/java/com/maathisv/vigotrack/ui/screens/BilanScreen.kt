@@ -1,5 +1,8 @@
 package com.maathisv.vigotrack.ui.screens
 
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -11,12 +14,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.maathisv.vigotrack.models.ActivityCategory
 import com.maathisv.vigotrack.models.ActivitySession
 import com.maathisv.vigotrack.models.ActivityStatus
 import com.maathisv.vigotrack.models.ActivityType
+import com.maathisv.vigotrack.models.ConnectionState
 import com.maathisv.vigotrack.models.Patient
+import com.maathisv.vigotrack.ui.components.AppTopBar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,13 +41,35 @@ fun BilanScreen(
     val bilanTypes = ActivityType.entries.filter { it.category == ActivityCategory.BILAN }
     val completedMap = remember(activities) { buildCompletedMap(activities) }
 
+    var showConnectionDialog by remember { mutableStateOf(false) }
+
+    val connectionState by homeViewModel.connectionState.collectAsState()
+    val deviceConnectionStates by homeViewModel.deviceConnectionStates.collectAsState()
+    val scannedDevices by homeViewModel.scannedDevices.collectAsState()
+    val connectedDevicesList by homeViewModel.connectedDevicesList.collectAsState()
+    val connectingId by homeViewModel.isConnectingToId.collectAsState()
+    val currentLogUri by homeViewModel.currentLogUri.collectAsState()
+    val namingTemplate by homeViewModel.namingTemplate.collectAsState()
+    val context = LocalContext.current
+
+    val folderPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        uri?.let {
+            context.contentResolver.takePersistableUriPermission(
+                it,
+                Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            )
+            homeViewModel.updateLogUri(it.toString())
+        }
+    }
+
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Bilans — ${stage?.name ?: ""}") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) { Text("<") }
-                }
+            AppTopBar(
+                title = "Bilans — ${stage?.name ?: ""}",
+                onBack = onBack,
+                onSettingsClick = { showConnectionDialog = true }
             )
         }
     ) { padding ->
@@ -87,6 +115,34 @@ fun BilanScreen(
                 }
             }
         }
+    }
+
+    if (showConnectionDialog) {
+        ConnectionDialog(
+            scannedDevices = scannedDevices,
+            connectedDevicesList = connectedDevicesList,
+            deviceConnectionStates = deviceConnectionStates,
+            connectingId = connectingId,
+            patients = patients,
+            sensorPatientLinks = sensorPatientLinks,
+            currentLogUri = currentLogUri,
+            namingTemplate = namingTemplate,
+            onDismiss = { showConnectionDialog = false },
+            onConnect = { sensor -> homeViewModel.connectToDevice(sensor) },
+            onDisconnect = { id -> homeViewModel.disconnectFromDevice(id) },
+            onRenameSensor = { deviceId, name -> homeViewModel.renameSensor(deviceId, name) },
+            onAddPatient = { name -> homeViewModel.addPatient(name) },
+            onDeletePatient = { patient -> homeViewModel.deletePatient(patient) },
+            onPickLogFolder = { folderPickerLauncher.launch(null) },
+            onTemplateChange = { homeViewModel.updateNamingTemplate(it) },
+            onResetTemplate = { homeViewModel.resetNamingTemplate() },
+            onCreateSensorPatientLink = { patientId, sensorId, features ->
+                homeViewModel.createSensorPatientLink(patientId, sensorId, features)
+            },
+            onDeleteSensorPatientLink = { link ->
+                homeViewModel.deleteSensorPatientLink(link)
+            }
+        )
     }
 }
 
