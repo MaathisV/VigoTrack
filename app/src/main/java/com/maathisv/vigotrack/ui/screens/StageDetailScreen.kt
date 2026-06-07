@@ -6,7 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -189,7 +189,7 @@ private fun ActivityRow(session: ActivitySession, onClick: () -> Unit) {
                 imageVector = when (session.status) {
                     ActivityStatus.COMPLETED -> Icons.Default.CheckCircle
                     ActivityStatus.IN_PROGRESS -> Icons.Default.PlayArrow
-                    ActivityStatus.SCHEDULED -> Icons.Default.Schedule
+                    ActivityStatus.SCHEDULED -> Icons.Default.DateRange
                 },
                 contentDescription = session.status.name,
                 modifier = Modifier.size(24.dp),

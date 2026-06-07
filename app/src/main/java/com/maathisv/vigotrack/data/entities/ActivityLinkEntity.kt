@@ -23,7 +23,7 @@ import androidx.room.PrimaryKey
             entity = SensorEntity::class,
             parentColumns = ["deviceId"],
             childColumns = ["sensorId"],
-            onDelete = ForeignKey.CASCADE
+            onDelete = ForeignKey.NO_ACTION
         ),
         ForeignKey(
             entity = PatientEntity::class,

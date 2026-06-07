@@ -22,7 +22,6 @@ import java.util.Locale
 
 const val ACTION_START_STREAMS = "com.maathisv.vigotrack.START_STREAMS"
 const val ACTION_STOP_STREAMS = "com.maathisv.vigotrack.STOP_STREAMS"
-const val ACTION_UPDATE_ACTIVITY = "com.maathisv.vigotrack.UPDATE_ACTIVITY"
 const val EXTRA_SENSOR_IDS = "extra_sensor_ids"
 const val EXTRA_ACTIVITY_NAME = "extra_activity_name"
 const val EXTRA_ACTIVITY_CATEGORY = "extra_activity_category"

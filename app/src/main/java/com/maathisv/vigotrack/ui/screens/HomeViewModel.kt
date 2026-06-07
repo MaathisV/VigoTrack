@@ -17,6 +17,7 @@ import com.maathisv.vigotrack.repository.ActivityRepository
 import com.maathisv.vigotrack.repository.SensorRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -197,7 +198,13 @@ class HomeViewModel(
         }
     }
 
-    fun toggleSession(activity: ActivitySession) {
+    fun removeLink(activityId: String, sensorId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            activityRepo.removeLinkFromActivity(activityId, sensorId)
+        }
+    }
+
+    fun toggleSession(activity: ActivitySession, checkedSensorIds: Set<String> = emptySet()) {
         viewModelScope.launch {
             // Use getApplication() here!
             val intent = Intent(getApplication(), PolarService::class.java)
@@ -209,16 +216,37 @@ class HomeViewModel(
                 intent.action = ACTION_STOP_STREAMS
                 getApplication<Application>().startService(intent)
             } else {
+                val existingSensorIds = activity.links.map { it.sensorId }.toSet()
+                sensorPatientLinks.value
+                    .filter { it.sensorId in checkedSensorIds && it.sensorId !in existingSensorIds }
+                    .forEach { link ->
+                        val patientName = patients.value.find { it.id == link.patientId }?.name ?: "Unknown"
+                        val finalPatientId = link.patientId ?: patientDataSource.insertPatient(Patient(name = patientName))
+                        val newLink = ActivitySession.ActivityLink(
+                            patientId = finalPatientId,
+                            patientName = patientName,
+                            sensorId = link.sensorId,
+                            featuresToTrack = link.features
+                        )
+                        activityRepo.addLinkToActivity(activity.id, newLink)
+                    }
+
                 activityRepo.startActivity(activity)
                 sensorRepo.startActivityStreaming(activity)
 
                 val sensorIds = activity.links.map { it.sensorId }.toTypedArray()
                 val firstLink = activity.links.firstOrNull()
+                val stageName = activity.stageId?.let { id ->
+                    stages.value.find { it.id == id }?.name
+                } ?: "NoStage"
                 val intent = Intent(getApplication(), PolarService::class.java).apply {
                     action = ACTION_START_STREAMS
                     putExtra(EXTRA_SENSOR_IDS, sensorIds)
                     putExtra(EXTRA_ACTIVITY_NAME, activity.activityType.displayName)
+                    putExtra(EXTRA_ACTIVITY_CATEGORY, activity.activityType.category.name)
                     putExtra(EXTRA_PATIENT_NAME, firstLink?.patientName ?: "")
+                    putExtra(EXTRA_STAGE_NAME, stageName)
+                    putExtra(EXTRA_SESSION_DATE, System.currentTimeMillis())
                 }
                 getApplication<Application>().startService(intent)
             }
@@ -246,6 +274,60 @@ class HomeViewModel(
     fun deleteSensorPatientLink(link: SensorPatientLink) {
         viewModelScope.launch(Dispatchers.IO) {
             sensorPatientLinkDataSource.deleteLink(link)
+        }
+    }
+
+    fun getActivitiesForStage(stageId: Long): Flow<List<ActivitySession>> =
+        activityRepo.getActivitiesByStage(stageId)
+
+    fun createActivityInStage(id: String, stageId: Long, type: ActivityType) {
+        viewModelScope.launch(Dispatchers.IO) {
+            activityRepo.createActivity(type, System.currentTimeMillis(), stageId, id)
+        }
+    }
+
+    fun createStage(name: String, start: Long, end: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            stageDataSource.insertStage(Stage(name = name, startDate = start, endDate = end))
+        }
+    }
+
+    fun updateActivityType(activity: ActivitySession, newType: ActivityType) {
+        viewModelScope.launch(Dispatchers.IO) {
+            activityRepo.updateActivity(activity.copy(activityType = newType))
+        }
+    }
+
+    fun splitActivityOnTypeChange(activity: ActivitySession, newType: ActivityType, onComplete: (String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            activityRepo.stopActivity(activity)
+            val newId = java.util.UUID.randomUUID().toString()
+            activityRepo.createActivity(newType, System.currentTimeMillis(), activity.stageId, newId)
+            activity.links.forEach { link ->
+                activityRepo.addLinkToActivity(newId, link)
+            }
+            val newActivity = activity.copy(
+                id = newId, activityType = newType,
+                links = activity.links, scheduledDate = System.currentTimeMillis()
+            )
+            activityRepo.startActivity(newActivity)
+            withContext(Dispatchers.Main) {
+                onComplete(newId)
+            }
+        }
+    }
+
+    fun startPatientStream(sensorId: String, features: List<String>) {
+        viewModelScope.launch {
+            features.forEach { feature ->
+                sensorRepo.startFeatureStream(sensorId, feature)
+            }
+        }
+    }
+
+    fun stopPatientStream(sensorId: String) {
+        viewModelScope.launch {
+            sensorRepo.stopActivityStreaming(sensorId)
         }
     }
 }

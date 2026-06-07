@@ -39,4 +39,7 @@ interface ActivityDao {
 
     @Query("DELETE FROM activity_links WHERE linkId = :linkId")
     suspend fun deleteLinkById(linkId: Long)
+
+    @Query("DELETE FROM activity_links WHERE parentActivityId = :activityId AND sensorId = :sensorId")
+    suspend fun deleteLinkByActivityAndSensor(activityId: String, sensorId: String)
 }
