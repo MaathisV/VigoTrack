@@ -1,0 +1,280 @@
+package com.maathisv.vigotrack.ui.screens
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.maathisv.vigotrack.models.ActivitySession
+import com.maathisv.vigotrack.models.ActivityStatus
+import com.maathisv.vigotrack.models.ActivityCategory
+import com.maathisv.vigotrack.models.ActivityType
+import com.maathisv.vigotrack.models.Stage
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.UUID
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun StageDetailScreen(
+    stageId: Long,
+    homeViewModel: HomeViewModel,
+    onBilanClick: (Long) -> Unit,
+    onActivityClick: (String) -> Unit,
+    onBack: () -> Unit
+) {
+    val stages by homeViewModel.stages.collectAsState()
+    val stage = stages.find { it.id == stageId }
+    val activities by homeViewModel.getActivitiesForStage(stageId).collectAsState(initial = emptyList())
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stage?.name ?: "Stage") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) { Text("<") }
+                }
+            )
+        }
+    ) { padding ->
+        if (stage == null) {
+            Box(
+                modifier = Modifier.fillMaxSize().padding(padding),
+                contentAlignment = Alignment.Center
+            ) { Text("Stage not found") }
+        } else {
+            StageDetailContent(
+                stage = stage,
+                activities = activities,
+                onBilanClick = { onBilanClick(stageId) },
+                onActivityClick = onActivityClick,
+                onRecordClick = {
+                    val newId = UUID.randomUUID().toString()
+                    homeViewModel.createActivityInStage(newId, stage.id, ActivityType.MARCHE)
+                    onActivityClick(newId)
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun StageDetailContent(
+    stage: Stage,
+    activities: List<ActivitySession>,
+    onBilanClick: () -> Unit,
+    onActivityClick: (String) -> Unit,
+    onRecordClick: () -> Unit
+) {
+    val dateFormat = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()) }
+    val dayFormat = remember { SimpleDateFormat("EEEE dd MMMM", Locale.getDefault()) }
+
+    val activitiesByDay = activities.groupBy { dayFormat.format(Date(it.scheduledDate)) }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(stage.name, style = MaterialTheme.typography.headlineSmall)
+                    Text(
+                        text = "${dateFormat.format(Date(stage.startDate))} — ${dateFormat.format(Date(stage.endDate))}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        item {
+            Button(
+                onClick = onBilanClick,
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.tertiary
+                )
+            ) { Text("BILAN", style = MaterialTheme.typography.titleMedium) }
+        }
+
+        item {
+            Button(
+                onClick = onRecordClick,
+                modifier = Modifier.fillMaxWidth().height(56.dp)
+            ) { Text("Record", style = MaterialTheme.typography.titleMedium) }
+        }
+
+        item {
+            Text("Activities", style = MaterialTheme.typography.titleMedium)
+        }
+
+        if (activities.isEmpty()) {
+            item { Text("No activities yet for this stage.", style = MaterialTheme.typography.bodySmall) }
+        } else {
+            activitiesByDay.forEach { (day, dayActivities) ->
+                item {
+                    Text(
+                        text = day.replaceFirstChar { it.uppercase() },
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                items(dayActivities, key = { it.id }) { session ->
+                    ActivityRow(session = session, onClick = { onActivityClick(session.id) })
+                }
+            }
+        }
+
+        // Planning section — kept for reference if needed later
+        // if (activities.isNotEmpty()) {
+        //     item {
+        //         HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+        //         Text("Planning", style = MaterialTheme.typography.titleMedium)
+        //     }
+        //     val patientsInStage = activities.flatMap { it.links }
+        //         .distinctBy { it.patientId }
+        //         .mapNotNull { link -> patients.find { it.id == link.patientId } }
+        //     if (patientsInStage.isEmpty()) {
+        //         item { Text("No patients linked yet.", style = MaterialTheme.typography.bodySmall) }
+        //     } else {
+        //         patientsInStage.forEach { patient ->
+        //             val patientActivities = activities.filter { act ->
+        //                 act.links.any { it.patientId == patient.id }
+        //             }
+        //             val total = patientActivities.size
+        //             val done = patientActivities.count { it.status == ActivityStatus.COMPLETED }
+        //             item {
+        //                 PlanningRow(
+        //                     patientName = patient.name,
+        //                     done = done,
+        //                     total = total
+        //                 )
+        //             }
+        //         }
+        //     }
+        // }
+    }
+}
+
+@Composable
+private fun ActivityRow(session: ActivitySession, onClick: () -> Unit) {
+    val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
+    val patientNames = session.links.map { it.patientName }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onClick,
+        colors = CardDefaults.cardColors(
+            containerColor = when (session.status) {
+                ActivityStatus.COMPLETED -> MaterialTheme.colorScheme.surfaceVariant
+                ActivityStatus.IN_PROGRESS -> MaterialTheme.colorScheme.secondaryContainer
+                ActivityStatus.SCHEDULED -> MaterialTheme.colorScheme.surface
+            }
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = when (session.status) {
+                    ActivityStatus.COMPLETED -> Icons.Default.CheckCircle
+                    ActivityStatus.IN_PROGRESS -> Icons.Default.PlayArrow
+                    ActivityStatus.SCHEDULED -> Icons.Default.Schedule
+                },
+                contentDescription = session.status.name,
+                modifier = Modifier.size(24.dp),
+                tint = when (session.status) {
+                    ActivityStatus.COMPLETED -> MaterialTheme.colorScheme.primary
+                    ActivityStatus.IN_PROGRESS -> MaterialTheme.colorScheme.secondary
+                    ActivityStatus.SCHEDULED -> MaterialTheme.colorScheme.onSurfaceVariant
+                }
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(session.activityType.displayName, style = MaterialTheme.typography.bodyLarge)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Surface(
+                        shape = MaterialTheme.shapes.small,
+                        color = when (session.activityType.category) {
+                            ActivityCategory.ACTIVITE -> MaterialTheme.colorScheme.tertiaryContainer
+                            ActivityCategory.BILAN -> MaterialTheme.colorScheme.secondaryContainer
+                        }
+                    ) {
+                        Text(
+                            text = session.activityType.category.displayName,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
+                if (patientNames.isNotEmpty()) {
+                    Text(
+                        text = patientNames.joinToString(", "),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                val durationText = formatDuration(session.startTime, session.endTime, session.isRunning)
+                if (durationText != null) {
+                    Text(
+                        text = durationText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = timeFormat.format(Date(session.scheduledDate)),
+                style = MaterialTheme.typography.labelSmall
+            )
+        }
+    }
+}
+
+private fun formatDuration(startTime: Long?, endTime: Long?, isRunning: Boolean): String? {
+    if (isRunning) return "Running…"
+    if (startTime != null && endTime != null) {
+        val diffMs = endTime - startTime
+        val totalMinutes = diffMs / 60_000
+        if (totalMinutes < 1) return "< 1min"
+        return if (totalMinutes < 60) {
+            "${totalMinutes}min"
+        } else {
+            val hours = totalMinutes / 60
+            val mins = totalMinutes % 60
+            if (mins > 0) "${hours}h ${mins}min" else "${hours}h"
+        }
+    }
+    return null
+}
+
+// PlanningRow kept for reference — remove if no longer needed
+// @Composable
+// private fun PlanningRow(patientName: String, done: Int, total: Int) {
+//     Card(modifier = Modifier.fillMaxWidth()) {
+//         Row(
+//             modifier = Modifier.padding(12.dp),
+//             verticalAlignment = Alignment.CenterVertically,
+//             horizontalArrangement = Arrangement.SpaceBetween
+//         ) {
+//             Text(patientName, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+//             Text(
+//                 text = "$done / $total",
+//                 style = MaterialTheme.typography.bodyMedium,
+//                 color = if (done == total) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+//             )
+//         }
+//     }
+// }

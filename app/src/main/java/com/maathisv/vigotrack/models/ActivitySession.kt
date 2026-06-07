@@ -9,7 +9,8 @@ data class ActivitySession(
     val scheduledDate: Long,
     val startTime: Long? = null,
     val endTime: Long? = null,
-    val isRunning: Boolean = false
+    val isRunning: Boolean = false,
+    val stageId: Long? = null
 ) {
     // Determine status based on flags
     val status: ActivityStatus

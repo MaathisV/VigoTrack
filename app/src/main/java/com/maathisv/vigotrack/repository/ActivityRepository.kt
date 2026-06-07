@@ -10,13 +10,16 @@ class ActivityRepository(private val dataSource: ActivityDataSource) {
     // Source of truth (Mapping happens inside the DataSource implementation)
     val allActivities = dataSource.getAllActivities()
 
+    fun getActivitiesByStage(stageId: Long) = dataSource.getActivitiesByStage(stageId)
+
     // 1. Create a fresh Activity (No links yet)
-    suspend fun createActivity(type: ActivityType, scheduledDate: Long) {
+    suspend fun createActivity(type: ActivityType, scheduledDate: Long, stageId: Long? = null, activityId: String? = null) {
         val newActivity = ActivitySession(
-            id = UUID.randomUUID().toString(),
+            id = activityId ?: UUID.randomUUID().toString(),
             activityType = type,
             scheduledDate = scheduledDate,
-            links = emptyList()
+            links = emptyList(),
+            stageId = stageId
         )
         dataSource.insertActivity(newActivity)
     }

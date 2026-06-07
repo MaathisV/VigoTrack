@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.map
 
 interface ActivityDataSource {
     fun getAllActivities(): Flow<List<ActivitySession>>
+    fun getActivitiesByStage(stageId: Long): Flow<List<ActivitySession>>
     suspend fun insertActivity(activity: ActivitySession)
     suspend fun updateActivity(activity: ActivitySession)
     suspend fun deleteActivity(id: String)
@@ -18,6 +19,11 @@ class RoomActivityDataSource(private val dao: ActivityDao) : ActivityDataSource 
 
     override fun getAllActivities(): Flow<List<ActivitySession>> =
         dao.getActivitiesWithLinks().map { poos ->
+            poos.map { it.toDomain() }
+        }
+
+    override fun getActivitiesByStage(stageId: Long): Flow<List<ActivitySession>> =
+        dao.getActivitiesByStage(stageId).map { poos ->
             poos.map { it.toDomain() }
         }
 

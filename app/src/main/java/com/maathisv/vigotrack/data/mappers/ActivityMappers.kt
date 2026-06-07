@@ -14,6 +14,7 @@ fun ActivityWithLinks.toDomain(): ActivitySession {
         startTime = activity.startTime,
         endTime = activity.endTime,
         isRunning = activity.isRunning,
+        stageId = activity.stageId,
         links = links.map { it.toDomain() }
     )
 }
@@ -34,7 +35,8 @@ fun ActivitySession.toEntity(): ActivitySessionEntity {
         scheduledDate = scheduledDate,
         startTime = startTime,
         endTime = endTime,
-        isRunning = isRunning
+        isRunning = isRunning,
+        stageId = stageId
     )
 }
 
