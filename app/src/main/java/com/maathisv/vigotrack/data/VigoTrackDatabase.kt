@@ -13,15 +13,19 @@ import com.maathisv.vigotrack.data.entities.*
         SensorEntity::class,
         ActivitySessionEntity::class,
         ActivityLinkEntity::class,
-        PatientEntity::class
+        PatientEntity::class,
+        SensorPatientLinkEntity::class,
+        StageEntity::class
     ],
-    version = 4
+    version = 5
 )
 
 abstract class VigoTrackDatabase : RoomDatabase() {
     abstract fun sensorDao(): SensorDao
     abstract fun activityDao(): ActivityDao
     abstract fun patientDao(): PatientDao
+    abstract fun sensorPatientLinkDao(): SensorPatientLinkDao
+    abstract fun stageDao(): StageDao
 
     companion object {
         @Volatile

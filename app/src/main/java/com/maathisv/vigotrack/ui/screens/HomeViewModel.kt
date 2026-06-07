@@ -7,11 +7,16 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.core.content.edit
 import com.maathisv.vigotrack.data.PatientDataSource
+import com.maathisv.vigotrack.data.SensorPatientLinkDataSource
+import com.maathisv.vigotrack.data.StageDataSource
 import com.maathisv.vigotrack.models.Patient
 import com.maathisv.vigotrack.models.Sensor
+import com.maathisv.vigotrack.models.SensorPatientLink
+import com.maathisv.vigotrack.models.Stage
 import com.maathisv.vigotrack.repository.ActivityRepository
 import com.maathisv.vigotrack.repository.SensorRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,7 +34,9 @@ class HomeViewModel(
     private val application: Application,
     private val activityRepo: ActivityRepository,
     private val sensorRepo: SensorRepository,
-    private val patientDataSource: PatientDataSource
+    private val patientDataSource: PatientDataSource,
+    private val stageDataSource: StageDataSource,
+    private val sensorPatientLinkDataSource: SensorPatientLinkDataSource
 ) : AndroidViewModel(application) {
 
     val connectionState = sensorRepo.connectionState
@@ -56,6 +63,12 @@ class HomeViewModel(
     val isConnectingToId: StateFlow<String?> = _isConnectingToId.asStateFlow()
 
     val patients: StateFlow<List<Patient>> = patientDataSource.getAllPatients()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val stages: StateFlow<List<Stage>> = stageDataSource.getAllStages()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val sensorPatientLinks: StateFlow<List<SensorPatientLink>> = sensorPatientLinkDataSource.getAllLinks()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val deviceAvailableDataTypes = sensorRepo.availableStreamDataTypes
@@ -128,9 +141,46 @@ class HomeViewModel(
         sensorRepo.updateSensorDisplayName(deviceId, newName)
     }
 
-    fun createActivity(type: ActivityType, date: Long) {
-        viewModelScope.launch {
-            activityRepo.createActivity(type, date)
+    fun createActivity(type: ActivityType, date: Long, stageId: Long? = null, onCreated: ((String) -> Unit)? = null) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val id = java.util.UUID.randomUUID().toString()
+            activityRepo.createActivity(type, date, stageId, id)
+            withContext(Dispatchers.Main) {
+                onCreated?.invoke(id)
+            }
+        }
+    }
+
+    fun createActivityAndLink(
+        type: ActivityType,
+        date: Long,
+        stageId: Long?,
+        patientId: Long?,
+        patientName: String,
+        sensorId: String,
+        features: List<String>,
+        onCreated: (String) -> Unit
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val id = java.util.UUID.randomUUID().toString()
+            activityRepo.createActivity(type, date, stageId, id)
+            if (sensorId.isNotBlank()) {
+                val finalPatientId = if (patientId != null && patients.value.any { it.id == patientId }) {
+                    patientId
+                } else {
+                    patientDataSource.insertPatient(Patient(name = patientName))
+                }
+                val link = ActivitySession.ActivityLink(
+                    patientId = finalPatientId,
+                    patientName = patientName,
+                    sensorId = sensorId,
+                    featuresToTrack = features
+                )
+                activityRepo.addLinkToActivity(id, link)
+            }
+            withContext(Dispatchers.Main) {
+                onCreated(id)
+            }
         }
     }
 
@@ -184,6 +234,18 @@ class HomeViewModel(
     fun deletePatient(patient: Patient) {
         viewModelScope.launch(Dispatchers.IO) {
             patientDataSource.deletePatient(patient)
+        }
+    }
+
+    fun createSensorPatientLink(patientId: Long?, sensorId: String, features: List<String>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            sensorPatientLinkDataSource.insertLink(patientId, sensorId, features)
+        }
+    }
+
+    fun deleteSensorPatientLink(link: SensorPatientLink) {
+        viewModelScope.launch(Dispatchers.IO) {
+            sensorPatientLinkDataSource.deleteLink(link)
         }
     }
 }

@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import com.maathisv.vigotrack.models.ConnectionState
 import com.maathisv.vigotrack.models.Patient
 import com.maathisv.vigotrack.models.Sensor
+import com.maathisv.vigotrack.models.SensorPatientLink
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -24,6 +25,7 @@ fun ConnectionDialog(
     deviceConnectionStates: Map<String, ConnectionState>,
     connectingId: String?,
     patients: List<Patient>,
+    sensorPatientLinks: List<SensorPatientLink>,
     currentLogUri: String,
     namingTemplate: String,
     onDismiss: () -> Unit,
@@ -34,7 +36,9 @@ fun ConnectionDialog(
     onDeletePatient: (Patient) -> Unit,
     onPickLogFolder: () -> Unit,
     onTemplateChange: (String) -> Unit,
-    onResetTemplate: () -> Unit
+    onResetTemplate: () -> Unit,
+    onCreateSensorPatientLink: (Long?, String, List<String>) -> Unit,
+    onDeleteSensorPatientLink: (SensorPatientLink) -> Unit
 ) {
     var selectedTab by remember { mutableStateOf(0) }
 
@@ -50,11 +54,16 @@ fun ConnectionDialog(
                 Tab(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
-                    text = { Text("Patients") }
+                    text = { Text("Links") }
                 )
                 Tab(
                     selected = selectedTab == 2,
                     onClick = { selectedTab = 2 },
+                    text = { Text("Patients") }
+                )
+                Tab(
+                    selected = selectedTab == 3,
+                    onClick = { selectedTab = 3 },
                     text = { Text("Settings") }
                 )
             }
@@ -70,12 +79,19 @@ fun ConnectionDialog(
                     onDisconnect = onDisconnect,
                     onRenameSensor = onRenameSensor
                 )
-                1 -> PatientTab(
+                1 -> LinksTab(
+                    connectedDevicesList = connectedDevicesList,
+                    patients = patients,
+                    sensorPatientLinks = sensorPatientLinks,
+                    onAddLink = onCreateSensorPatientLink,
+                    onDeleteLink = onDeleteSensorPatientLink
+                )
+                2 -> PatientTab(
                     patients = patients,
                     onAddPatient = onAddPatient,
                     onDeletePatient = onDeletePatient
                 )
-                2 -> SettingsTab(
+                3 -> SettingsTab(
                     currentLogUri = currentLogUri,
                     namingTemplate = namingTemplate,
                     onPickLogFolder = onPickLogFolder,
@@ -225,6 +241,195 @@ private fun DeviceTab(
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LinksTab(
+    connectedDevicesList: List<Sensor>,
+    patients: List<Patient>,
+    sensorPatientLinks: List<SensorPatientLink>,
+    onAddLink: (Long?, String, List<String>) -> Unit,
+    onDeleteLink: (SensorPatientLink) -> Unit
+) {
+    var showAddDialog by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxWidth().heightIn(max = 450.dp)) {
+        Text(
+            text = "Patient-Sensor Links",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Button(
+            onClick = { showAddDialog = true },
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("New Link") }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+
+        if (sensorPatientLinks.isEmpty()) {
+            Text(
+                text = "No links configured. Add one to auto-link patients in new sessions.",
+                modifier = Modifier.padding(vertical = 12.dp),
+                style = MaterialTheme.typography.bodySmall
+            )
+        } else {
+            LazyColumn(modifier = Modifier.weight(1f)) {
+                items(sensorPatientLinks, key = { it.id }) { link ->
+                    val patientName = patients.find { it.id == link.patientId }?.name ?: "Unknown"
+                    val sensorName = connectedDevicesList.find { it.deviceId == link.sensorId }?.effectiveName ?: link.sensorId
+                    ListItem(
+                        headlineContent = { Text("$patientName → $sensorName") },
+                        supportingContent = { Text("Features: ${link.features.joinToString(", ")}") },
+                        trailingContent = {
+                            IconButton(onClick = { onDeleteLink(link) }) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "Delete link",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    if (showAddDialog) {
+        AddLinkDialog(
+            patients = patients,
+            sensors = connectedDevicesList,
+            onDismiss = { showAddDialog = false },
+            onConfirm = { patientId, sensorId, features ->
+                onAddLink(patientId, sensorId, features)
+                showAddDialog = false
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AddLinkDialog(
+    patients: List<Patient>,
+    sensors: List<Sensor>,
+    onDismiss: () -> Unit,
+    onConfirm: (Long?, String, List<String>) -> Unit
+) {
+    var selectedPatientId by remember { mutableStateOf<Long?>(null) }
+    var patientDropdownExpanded by remember { mutableStateOf(false) }
+    var selectedSensorId by remember { mutableStateOf("") }
+    var sensorDropdownExpanded by remember { mutableStateOf(false) }
+    var hrEnabled by remember { mutableStateOf(true) }
+    var ppiEnabled by remember { mutableStateOf(true) }
+    var accEnabled by remember { mutableStateOf(true) }
+    var ecgEnabled by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("New Patient-Sensor Link") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                ExposedDropdownMenuBox(
+                    expanded = patientDropdownExpanded,
+                    onExpandedChange = { patientDropdownExpanded = it }
+                ) {
+                    val selectedPatientName = patients.find { it.id == selectedPatientId }?.name ?: "Select a patient"
+                    OutlinedTextField(
+                        value = selectedPatientName,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Patient") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = patientDropdownExpanded) },
+                        modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true).fillMaxWidth()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = patientDropdownExpanded,
+                        onDismissRequest = { patientDropdownExpanded = false }
+                    ) {
+                        patients.forEach { patient ->
+                            DropdownMenuItem(
+                                text = { Text(patient.name) },
+                                onClick = {
+                                    selectedPatientId = patient.id
+                                    patientDropdownExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                ExposedDropdownMenuBox(
+                    expanded = sensorDropdownExpanded,
+                    onExpandedChange = { sensorDropdownExpanded = it }
+                ) {
+                    val selectedSensorName = sensors.find { it.deviceId == selectedSensorId }?.effectiveName ?: selectedSensorId
+                    OutlinedTextField(
+                        value = selectedSensorName.ifEmpty { "Select a sensor" },
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Sensor") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = sensorDropdownExpanded) },
+                        modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true).fillMaxWidth()
+                    )
+                    ExposedDropdownMenu(
+                        expanded = sensorDropdownExpanded,
+                        onDismissRequest = { sensorDropdownExpanded = false }
+                    ) {
+                        sensors.forEach { sensor ->
+                            DropdownMenuItem(
+                                text = { Text(sensor.effectiveName) },
+                                onClick = {
+                                    selectedSensorId = sensor.deviceId
+                                    sensorDropdownExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                Text("Default Features", style = MaterialTheme.typography.labelSmall)
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = hrEnabled, onCheckedChange = { hrEnabled = it })
+                        Text("Heart Rate (HR)")
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = ppiEnabled, onCheckedChange = { ppiEnabled = it })
+                        Text("PP Interval (PPI)")
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = accEnabled, onCheckedChange = { accEnabled = it })
+                        Text("Accelerometer (ACC)")
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = ecgEnabled, onCheckedChange = { ecgEnabled = it })
+                        Text("ECG")
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val features = mutableListOf<String>()
+                    if (hrEnabled) features.add("HR")
+                    if (ppiEnabled) features.add("PPI")
+                    if (accEnabled) features.add("ACC")
+                    if (ecgEnabled) features.add("ECG")
+                    onConfirm(selectedPatientId, selectedSensorId, features)
+                },
+                enabled = selectedPatientId != null && selectedSensorId.isNotBlank()
+            ) { Text("Create Link") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }
 
 @Composable
