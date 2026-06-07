@@ -15,5 +15,6 @@ data class SensorEntity(
     @PrimaryKey val deviceId: String,
     val address: String,
     val name: String,
+    val displayName: String? = null,
     val lastSeen: Long = System.currentTimeMillis()
 )

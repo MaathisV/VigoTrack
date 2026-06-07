@@ -45,6 +45,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         if (hasRequiredPermissions()) {
             startForegroundShield()
+            (application as VigoTrackApplication).sensorRepository.onForegroundEntered()
         }
     }
 

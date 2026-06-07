@@ -15,11 +15,13 @@ import com.maathisv.vigotrack.models.ActivitySession
 import com.maathisv.vigotrack.models.ConnectionState
 import com.maathisv.vigotrack.models.Sensor
 import com.maathisv.vigotrack.models.StreamIdentifier
+import com.polar.androidcommunications.api.ble.exceptions.BleServiceNotFound
 import com.polar.androidcommunications.api.ble.model.DisInfo
 import com.polar.sdk.api.PolarBleApi
 import com.polar.sdk.api.PolarBleApiCallback
 import com.polar.sdk.api.PolarBleApiDefaultImpl
 import com.polar.sdk.api.PolarBleApi.PolarDeviceDataType
+import com.polar.sdk.api.errors.PolarDeviceNotFound
 import com.polar.sdk.api.model.PolarAccelerometerData
 import com.polar.sdk.api.model.PolarDeviceInfo
 import com.polar.sdk.api.model.PolarEcgData
@@ -27,6 +29,7 @@ import com.polar.sdk.api.model.PolarHealthThermometerData
 import com.polar.sdk.api.model.PolarHrData
 import com.polar.sdk.api.model.PolarPpiData
 import com.polar.sdk.api.model.PolarSensorSetting
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -44,7 +47,10 @@ class SensorRepository(
     private val dataSource: SensorDataSource
 ) {
     private val TAG = "VigoTrack"
-    private val repositoryScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
+        Log.e(TAG, "Unhandled error in repository scope", throwable)
+    }
+    private val repositoryScope = CoroutineScope(Dispatchers.Main + SupervisorJob() + exceptionHandler)
 
     private val api: PolarBleApi by lazy {
         PolarBleApiDefaultImpl.defaultImplementation(
@@ -77,13 +83,14 @@ class SensorRepository(
     private val _discoveredDevices = MutableStateFlow<Set<Sensor>>(emptySet())
     val discoveredDevices: StateFlow<Set<Sensor>> = _discoveredDevices.asStateFlow()
 
+    val savedSensors: Flow<List<Sensor>> = dataSource.getSavedSensors()
+
     private val _readyFeatures = MutableStateFlow<Map<String, Set<PolarBleApi.PolarBleSdkFeature>>>(emptyMap())
 
     private val _availableStreamDataTypes = MutableStateFlow<Map<String, Set<PolarDeviceDataType>>>(emptyMap())
     val availableStreamDataTypes: StateFlow<Map<String, Set<PolarDeviceDataType>>> = _availableStreamDataTypes.asStateFlow()
 
     private val activeJobs = mutableMapOf<StreamIdentifier, Job>()
-    private var healthMonitorJob: Job? = null
 
     private val _liveData = MutableStateFlow<Map<String, Map<String, Any>>>(emptyMap())
     val liveData = _liveData.asStateFlow()
@@ -104,24 +111,32 @@ class SensorRepository(
         setupPolarCallbacks()
         autoReconnectToSavedDevices()
         registerBleAclReceiver()
-        startHealthMonitor()
     }
 
     private fun autoReconnectToSavedDevices() {
         repositoryScope.launch {
-            // delay(5000)
             dataSource.getSavedSensors().first().forEach { saved ->
                 Log.d(TAG, "Auto-reconnecting to saved device: ${saved.deviceId} (${saved.name})")
                 connectWithRetry(saved.deviceId, saved.address)
-                delay(5000)
             }
         }
     }
 
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     private suspend fun connectWithRetry(deviceId: String, address: String? = null, maxRetries: Int = 3) {
         if (address != null && isDeviceSystemConnected(address) && deviceId !in _connectedDeviceIds.value) {
-            _connectedDeviceIds.update { it + deviceId }
-            _deviceConnectionStates.update { it + (deviceId to ConnectionState.CONNECTED) }
+            // Device is system-connected but the SDK may have a stale GATT session.
+            // Force disconnect first to clear the GATT cache, then reconnect fresh.
+            Log.d(TAG, "Forcing clean reconnection for $deviceId")
+            _deviceConnectionStates.update { it + (deviceId to ConnectionState.CONNECTING) }
+            try {
+                api.disconnectFromDevice(deviceId)
+                delay(500)
+                api.connectToDevice(deviceId)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to re-establish SDK session for $deviceId", e)
+                _deviceConnectionStates.update { it + (deviceId to ConnectionState.NOT_CONNECTED) }
+            }
             return
         }
         _deviceConnectionStates.update { it + (deviceId to ConnectionState.CONNECTING) }
@@ -169,13 +184,16 @@ class SensorRepository(
                 _deviceConnectionStates.update { it + (polarDeviceInfo.deviceId to ConnectionState.CONNECTED) }
 
                 repositoryScope.launch {
-                    dataSource.saveSensor(
-                        Sensor(
-                            deviceId = polarDeviceInfo.deviceId,
-                            address = polarDeviceInfo.address,
-                            name = polarDeviceInfo.name
+                    val existing = dataSource.getSavedSensors().first().find { it.deviceId == polarDeviceInfo.deviceId }
+                    if (existing == null) {
+                        dataSource.saveSensor(
+                            Sensor(
+                                deviceId = polarDeviceInfo.deviceId,
+                                address = polarDeviceInfo.address,
+                                name = polarDeviceInfo.name
+                            )
                         )
-                    )
+                    }
                 }
             }
 
@@ -204,6 +222,7 @@ class SensorRepository(
                 }
 
                 if (ready.contains(PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_ONLINE_STREAMING)) {
+                    _deviceConnectionStates.update { it + (identifier to ConnectionState.FEATURES_READY) }
                     repositoryScope.launch {
                         try {
                             val types = api.getAvailableOnlineStreamDataTypes(identifier)
@@ -267,8 +286,9 @@ class SensorRepository(
         }
     }
 
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     private fun handleSystemBleDisconnection(macAddress: String) {
-        repositoryScope.launch @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT) {
+        repositoryScope.launch {
             val saved = dataSource.getSavedSensors().first().firstOrNull {
                 it.deviceId == macAddress || it.address == macAddress
             }
@@ -280,30 +300,6 @@ class SensorRepository(
                 _readyFeatures.update { it - saved.deviceId }
                 _availableStreamDataTypes.update { it - saved.deviceId }
                 _deviceConnectionStates.update { it - saved.deviceId }
-            }
-        }
-    }
-
-    private fun startHealthMonitor() {
-        healthMonitorJob?.cancel()
-        healthMonitorJob = repositoryScope.launch @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT) {
-            while (true) {
-                val connected = _connectedDeviceIds.value.toList()
-                if (connected.isNotEmpty()) {
-                    val savedDevices = dataSource.getSavedSensors().first()
-                    for (deviceId in connected) {
-                        val saved = savedDevices.firstOrNull { it.deviceId == deviceId }
-                        val address = saved?.address ?: continue
-                        if (!isDeviceSystemConnected(address)) {
-                            Log.d(TAG, "Health monitor: $deviceId no longer system-connected")
-                            _connectedDeviceIds.update { it - deviceId }
-                            _readyFeatures.update { it - deviceId }
-                            _availableStreamDataTypes.update { it - deviceId }
-                            _deviceConnectionStates.update { it - deviceId }
-                        }
-                    }
-                }
-                delay(30_000)
             }
         }
     }
@@ -322,39 +318,25 @@ class SensorRepository(
             .launchIn(repositoryScope)
     }
 
-    fun requestConnect(sensor: Sensor) {
-        try {
-            val identifier = sensor.deviceId.ifEmpty { sensor.address }
-            Log.d(TAG, "Attempting connection to identifier: $identifier")
-            api.connectToDevice(identifier)
-        } catch (e: Exception) {
-            Log.e(TAG, "Connection failed", e)
-        }
+    suspend fun connectToDevice(sensor: Sensor) {
+        connectWithRetry(sensor.deviceId, sensor.address)
     }
 
     fun requestDisconnect(deviceId: String) {
         api.disconnectFromDevice(deviceId)
     }
 
-    fun connectToDevice(sensor: Sensor) {
-        val identifier = sensor.deviceId.ifEmpty { sensor.address }
-        connectByIdentifier(identifier)
+    fun onForegroundEntered() {
+        api.foregroundEntered()
     }
 
-    private fun connectByIdentifier(identifier: String) {
-        if (_connectedDeviceIds.value.contains(identifier)) {
-            Log.d(TAG, "Already connected to $identifier, skipping.")
-            return
-        }
-        Log.d(TAG, "Connecting to: $identifier")
-        _deviceConnectionStates.update { it + (identifier to ConnectionState.CONNECTING) }
-        try {
-            api.connectToDevice(identifier)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to connect to $identifier", e)
-            _deviceConnectionStates.update { it + (identifier to ConnectionState.NOT_CONNECTED) }
+    fun updateSensorDisplayName(deviceId: String, name: String) {
+        repositoryScope.launch {
+            dataSource.updateSensorName(deviceId, name)
         }
     }
+
+
 
     private fun updateLiveData(deviceId: String, feature: String, value: Any) {
         _liveData.update { currentMap ->
@@ -412,6 +394,13 @@ class SensorRepository(
 
         val job = when (feature) {
             "HR" -> api.startHrStreaming(deviceId)
+                .retry(3) { cause ->
+                    if (cause is PolarDeviceNotFound || cause is BleServiceNotFound) {
+                        Log.w(TAG, "HR stream not ready for $deviceId, retrying in 2s...")
+                        delay(2000)
+                        true
+                    } else false
+                }
                 .onEach { data ->
                     _hrLogFlow.tryEmit(deviceId to data)
                     val sample = data.samples.first()
@@ -424,6 +413,13 @@ class SensorRepository(
                 .launchIn(repositoryScope)
 
             "PPI" -> api.startPpiStreaming(deviceId)
+                .retry(3) { cause ->
+                    if (cause is PolarDeviceNotFound || cause is BleServiceNotFound) {
+                        Log.w(TAG, "PPI stream not ready for $deviceId, retrying in 2s...")
+                        delay(2000)
+                        true
+                    } else false
+                }
                 .onEach { data ->
                     _ppiLogFlow.tryEmit(deviceId to data)
                     val sample = data.samples.first()
@@ -434,11 +430,11 @@ class SensorRepository(
                 .catch { e -> Log.e(TAG, "Stream failed: PPI for $deviceId", e) }
                 .launchIn(repositoryScope)
 
-            "ACC" -> {
-                repositoryScope.launch {
+            "ACC" -> repositoryScope.launch {
+                var accRetries = 0
+                while (accRetries < 3) {
                     try {
                         val accSettings = settings ?: api.requestStreamSettings(deviceId, PolarBleApi.PolarDeviceDataType.ACC).maxSettings()
-
                         api.startAccStreaming(deviceId, accSettings)
                             .onEach { data ->
                                 _accLogFlow.tryEmit(deviceId to data)
@@ -453,18 +449,27 @@ class SensorRepository(
                                 }
                             }
                             .catch { e -> Log.e(TAG, "ACC Stream internal fail", e) }
-                            .launchIn(repositoryScope)
+                            .collect()
+                        break
+                    } catch (e: PolarDeviceNotFound) {
+                        accRetries++
+                        if (accRetries < 3) {
+                            Log.w(TAG, "PolarDeviceNotFound for ACC $deviceId, retry $accRetries...")
+                            delay(2000)
+                        } else {
+                            Log.e(TAG, "Failed to get ACC settings or start stream", e)
+                        }
                     } catch (e: Exception) {
                         Log.e(TAG, "Failed to get ACC settings or start stream", e)
+                        break
                     }
                 }
-                Job()
             }
-            "ECG" -> {
-                repositoryScope.launch {
+            "ECG" -> repositoryScope.launch {
+                var ecgRetries = 0
+                while (ecgRetries < 3) {
                     try {
                         val ecgSettings = settings ?: api.requestStreamSettings(deviceId, PolarBleApi.PolarDeviceDataType.ECG).maxSettings()
-
                         api.startEcgStreaming(deviceId, ecgSettings)
                             .onEach { data ->
                                 _ecgLogFlow.tryEmit(deviceId to data)
@@ -481,12 +486,21 @@ class SensorRepository(
                                 }
                             }
                             .catch { e -> Log.e(TAG, "ECG Stream internal fail", e) }
-                            .launchIn(repositoryScope)
+                            .collect()
+                        break
+                    } catch (e: PolarDeviceNotFound) {
+                        ecgRetries++
+                        if (ecgRetries < 3) {
+                            Log.w(TAG, "PolarDeviceNotFound for ECG $deviceId, retry $ecgRetries...")
+                            delay(2000)
+                        } else {
+                            Log.e(TAG, "Failed to get ECG settings or start stream", e)
+                        }
                     } catch (e: Exception) {
                         Log.e(TAG, "Failed to get ECG settings or start stream", e)
+                        break
                     }
                 }
-                Job()
             }
             else -> {
                 Log.e(TAG, "Unsupported feature: $feature")

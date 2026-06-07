@@ -2,6 +2,7 @@ package com.maathisv.vigotrack.ui.screens
 
 import android.app.Application
 import android.content.Intent
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.core.content.edit
@@ -15,6 +16,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -35,13 +37,16 @@ class HomeViewModel(
     val activities = activityRepo.allActivities
     val sensorLiveData = sensorRepo.liveData
 
-    val connectedDevicesList = sensorRepo.connectedDeviceIds
-        .map { it.toList() }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
+    val connectedDevicesList = combine(
+        sensorRepo.connectedDeviceIds,
+        sensorRepo.savedSensors
+    ) { ids, saved ->
+        ids.mapNotNull { id -> saved.find { it.deviceId == id } }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
 
     val scannedDevices: StateFlow<List<Sensor>> = sensorRepo.discoveredDevices
         .map { it.toList() }
@@ -102,7 +107,13 @@ class HomeViewModel(
     fun connectToDevice(sensor: Sensor) {
         _isConnectingToId.value = sensor.deviceId
         viewModelScope.launch(Dispatchers.IO) {
-            sensorRepo.requestConnect(sensor)
+            try {
+                sensorRepo.connectToDevice(sensor)
+            } catch (e: Exception) {
+                Log.e("HomeViewModel", "Connection failed", e)
+            } finally {
+                _isConnectingToId.value = null
+            }
         }
     }
 
@@ -111,6 +122,10 @@ class HomeViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             sensorRepo.requestDisconnect(id)
         }
+    }
+
+    fun renameSensor(deviceId: String, newName: String) {
+        sensorRepo.updateSensorDisplayName(deviceId, newName)
     }
 
     fun createActivity(type: ActivityType, date: Long) {

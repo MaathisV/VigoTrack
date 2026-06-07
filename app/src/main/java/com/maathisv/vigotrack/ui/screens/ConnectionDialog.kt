@@ -20,7 +20,7 @@ import com.maathisv.vigotrack.models.Sensor
 @Composable
 fun ConnectionDialog(
     scannedDevices: List<Sensor>,
-    connectedDevicesList: List<String>,
+    connectedDevicesList: List<Sensor>,
     deviceConnectionStates: Map<String, ConnectionState>,
     connectingId: String?,
     patients: List<Patient>,
@@ -29,6 +29,7 @@ fun ConnectionDialog(
     onDismiss: () -> Unit,
     onConnect: (Sensor) -> Unit,
     onDisconnect: (String) -> Unit,
+    onRenameSensor: (String, String) -> Unit,
     onAddPatient: (String) -> Unit,
     onDeletePatient: (Patient) -> Unit,
     onPickLogFolder: () -> Unit,
@@ -66,7 +67,8 @@ fun ConnectionDialog(
                     deviceConnectionStates = deviceConnectionStates,
                     connectingId = connectingId,
                     onConnect = onConnect,
-                    onDisconnect = onDisconnect
+                    onDisconnect = onDisconnect,
+                    onRenameSensor = onRenameSensor
                 )
                 1 -> PatientTab(
                     patients = patients,
@@ -91,11 +93,12 @@ fun ConnectionDialog(
 @Composable
 private fun DeviceTab(
     scannedDevices: List<Sensor>,
-    connectedDevicesList: List<String>,
+    connectedDevicesList: List<Sensor>,
     deviceConnectionStates: Map<String, ConnectionState>,
     connectingId: String?,
     onConnect: (Sensor) -> Unit,
-    onDisconnect: (String) -> Unit
+    onDisconnect: (String) -> Unit,
+    onRenameSensor: (String, String) -> Unit
 ) {
     Column(modifier = Modifier.fillMaxWidth().heightIn(max = 450.dp)) {
         Text(
@@ -103,6 +106,9 @@ private fun DeviceTab(
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary
         )
+
+        var renamingDeviceId by remember { mutableStateOf<String?>(null) }
+        var renameText by remember { mutableStateOf("") }
 
         if (connectedDevicesList.isEmpty()) {
             Text(
@@ -112,26 +118,61 @@ private fun DeviceTab(
             )
         } else {
             Column {
-                connectedDevicesList.forEach { id ->
-                    val state = deviceConnectionStates[id]
+                connectedDevicesList.forEach { sensor ->
+                    val state = deviceConnectionStates[sensor.deviceId]
                     val isConnecting = state == ConnectionState.CONNECTING
                     val stateSuffix = when (state) {
                         ConnectionState.FEATURES_READY -> " (Ready)"
                         ConnectionState.CONNECTING -> " (Connecting...)"
                         else -> ""
                     }
-                    ListItem(
-                        headlineContent = { Text("Polar Device ($id)$stateSuffix") },
-                        trailingContent = {
-                            if (isConnecting) {
-                                CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                            } else {
-                                TextButton(onClick = { onDisconnect(id) }) {
-                                    Text("Disconnect", color = MaterialTheme.colorScheme.error)
+
+                    if (renamingDeviceId == sensor.deviceId) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = renameText,
+                                onValueChange = { renameText = it },
+                                label = { Text("Custom name") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                            TextButton(onClick = {
+                                if (renameText.isNotBlank()) {
+                                    onRenameSensor(sensor.deviceId, renameText.trim())
+                                }
+                                renamingDeviceId = null
+                            }) { Text("Save") }
+                            TextButton(onClick = { renamingDeviceId = null }) { Text("Cancel") }
+                        }
+                    } else {
+                        ListItem(
+                            headlineContent = {
+                                Text("${sensor.effectiveName}$stateSuffix")
+                            },
+                            supportingContent = { Text("ID: ${sensor.deviceId}") },
+                            trailingContent = {
+                                if (isConnecting) {
+                                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                                } else {
+                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        TextButton(onClick = {
+                                            renameText = sensor.effectiveName
+                                            renamingDeviceId = sensor.deviceId
+                                        }) { Text("Rename") }
+                                        TextButton(onClick = { onDisconnect(sensor.deviceId) }) {
+                                            Text("Disconnect", color = MaterialTheme.colorScheme.error)
+                                        }
+                                    }
                                 }
                             }
-                        }
-                    )
+                        )
+                    }
                 }
             }
         }
@@ -145,7 +186,8 @@ private fun DeviceTab(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        val availableDevices = scannedDevices.filter { it.deviceId !in connectedDevicesList }
+        val connectedIds = connectedDevicesList.map { it.deviceId }.toSet()
+        val availableDevices = scannedDevices.filter { it.deviceId !in connectedIds }
 
         if (availableDevices.isEmpty()) {
             Column(
@@ -161,7 +203,7 @@ private fun DeviceTab(
                     val isThisDeviceConnecting = connectingId == sensor.deviceId
 
                     ListItem(
-                        headlineContent = { Text(sensor.name) },
+                        headlineContent = { Text(sensor.effectiveName) },
                         supportingContent = {
                             if (isThisDeviceConnecting) {
                                 Text("Initiating connection...", color = MaterialTheme.colorScheme.secondary)
