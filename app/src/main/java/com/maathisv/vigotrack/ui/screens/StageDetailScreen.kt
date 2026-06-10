@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material3.*
@@ -90,7 +91,8 @@ fun StageDetailScreen(
                     val newId = UUID.randomUUID().toString()
                     homeViewModel.createActivityInStage(newId, stage.id, ActivityType.MARCHE)
                     onActivityClick(newId)
-                }
+                },
+                onMarkStale = { activityId -> homeViewModel.markActivityAsStale(activityId) }
             )
         }
     }
@@ -130,7 +132,8 @@ private fun StageDetailContent(
     activities: List<ActivitySession>,
     onBilanClick: () -> Unit,
     onActivityClick: (String) -> Unit,
-    onRecordClick: () -> Unit
+    onRecordClick: () -> Unit,
+    onMarkStale: (String) -> Unit = {}
 ) {
     val dateFormat = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()) }
     val dayFormat = remember { SimpleDateFormat("EEEE dd MMMM", Locale.getDefault()) }
@@ -187,7 +190,7 @@ private fun StageDetailContent(
                     )
                 }
                 items(dayActivities, key = { it.id }) { session ->
-                    ActivityRow(session = session, onClick = { onActivityClick(session.id) })
+                    ActivityRow(session = session, onClick = { onActivityClick(session.id) }, onMarkStale = onMarkStale)
                 }
             }
         }
@@ -224,9 +227,10 @@ private fun StageDetailContent(
 }
 
 @Composable
-private fun ActivityRow(session: ActivitySession, onClick: () -> Unit) {
+private fun ActivityRow(session: ActivitySession, onClick: () -> Unit, onMarkStale: (String) -> Unit = {}) {
     val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
     val patientNames = session.links.map { it.patientName }
+    var showMenu by remember { mutableStateOf(false) }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -236,11 +240,12 @@ private fun ActivityRow(session: ActivitySession, onClick: () -> Unit) {
                 ActivityStatus.COMPLETED -> MaterialTheme.colorScheme.surfaceVariant
                 ActivityStatus.IN_PROGRESS -> MaterialTheme.colorScheme.secondaryContainer
                 ActivityStatus.SCHEDULED -> MaterialTheme.colorScheme.surface
+                ActivityStatus.STALE -> MaterialTheme.colorScheme.errorContainer
             }
         )
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(start = 12.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
@@ -248,6 +253,7 @@ private fun ActivityRow(session: ActivitySession, onClick: () -> Unit) {
                     ActivityStatus.COMPLETED -> Icons.Default.CheckCircle
                     ActivityStatus.IN_PROGRESS -> Icons.Default.PlayArrow
                     ActivityStatus.SCHEDULED -> Icons.Default.DateRange
+                    ActivityStatus.STALE -> Icons.Default.CheckCircle
                 },
                 contentDescription = session.status.name,
                 modifier = Modifier.size(24.dp),
@@ -255,12 +261,31 @@ private fun ActivityRow(session: ActivitySession, onClick: () -> Unit) {
                     ActivityStatus.COMPLETED -> MaterialTheme.colorScheme.primary
                     ActivityStatus.IN_PROGRESS -> MaterialTheme.colorScheme.secondary
                     ActivityStatus.SCHEDULED -> MaterialTheme.colorScheme.onSurfaceVariant
+                    ActivityStatus.STALE -> MaterialTheme.colorScheme.error
                 }
             )
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(session.activityType.displayName, style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        text = session.activityType.displayName,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = if (session.isStale) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurface
+                    )
+                    if (session.isStale) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.errorContainer
+                        ) {
+                            Text(
+                                text = "INVALIDÉ",
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                    }
                     Spacer(modifier = Modifier.width(8.dp))
                     Surface(
                         shape = MaterialTheme.shapes.small,
@@ -292,7 +317,25 @@ private fun ActivityRow(session: ActivitySession, onClick: () -> Unit) {
                     )
                 }
             }
-            Spacer(modifier = Modifier.width(8.dp))
+            Box {
+                IconButton(onClick = { showMenu = true }) {
+                    Icon(Icons.Default.MoreVert, contentDescription = "Plus")
+                }
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(if (session.isStale) "Déjà invalidé" else "Invalider") },
+                        onClick = {
+                            showMenu = false
+                            if (!session.isStale) onMarkStale(session.id)
+                        },
+                        enabled = !session.isStale
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(4.dp))
             Text(
                 text = timeFormat.format(Date(session.scheduledDate)),
                 style = MaterialTheme.typography.labelSmall

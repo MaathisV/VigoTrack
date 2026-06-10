@@ -2,7 +2,9 @@ package com.maathisv.vigotrack.ui.screens
 
 import android.app.Application
 import android.content.Intent
+import android.net.Uri
 import android.util.Log
+import androidx.documentfile.provider.DocumentFile
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.core.content.edit
@@ -23,6 +25,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -30,6 +33,9 @@ import com.maathisv.vigotrack.models.ActivitySession
 import com.maathisv.vigotrack.models.ActivityType
 import com.maathisv.vigotrack.services.*
 import com.maathisv.vigotrack.services.PolarService
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class HomeViewModel(
     private val application: Application,
@@ -356,5 +362,70 @@ class HomeViewModel(
         viewModelScope.launch {
             sensorRepo.stopActivityStreaming(sensorId)
         }
+    }
+
+    fun markActivityAsStale(activityId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val activities = activityRepo.allActivities.first()
+            val activity = activities.find { it.id == activityId } ?: return@launch
+            activityRepo.updateActivity(activity.copy(isStale = true))
+            renameActivityFiles(activity)
+        }
+    }
+
+    private suspend fun renameActivityFiles(activity: ActivitySession) {
+        val uriString = currentLogUri.value
+        if (uriString.isBlank()) return
+        val rootUri = Uri.parse(uriString)
+
+        val stageName = stages.value.find { it.id == activity.stageId }?.name ?: "NoStage"
+        val patientName = activity.links.firstOrNull()?.patientName ?: "NoPatient"
+        val category = activity.activityType.category.name
+        val activityName = activity.activityType.displayName
+        val sessionDate = activity.startTime ?: activity.scheduledDate
+
+        val sdfDate = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        val sdfTime = SimpleDateFormat("HH-mm-ss", Locale.US)
+        val dateStr = sdfDate.format(Date(sessionDate))
+        val timeStr = sdfTime.format(Date(sessionDate))
+        val datetimeStr = "${dateStr}_${timeStr}"
+
+        val template = _namingTemplate.value
+        var dirPath = template.replace("/{sensor}_{tag}", "").replace("{tag}", "")
+        val staticValues = mapOf(
+            "stage" to stageName,
+            "patient" to patientName,
+            "category" to category,
+            "activity" to activityName,
+            "device" to "",
+            "sensor" to "",
+            "date" to dateStr,
+            "time" to timeStr,
+            "datetime" to datetimeStr,
+            "timestamp" to sessionDate.toString()
+        )
+        staticValues.forEach { (key, value) ->
+            dirPath = dirPath.replace("{$key}", sanitizeFileName(value))
+        }
+
+        val segments = dirPath.split("/").filter { it.isNotBlank() }
+        if (segments.isEmpty()) return
+
+        try {
+            var current = DocumentFile.fromTreeUri(getApplication(), rootUri) ?: return
+            for (segment in segments) {
+                current = current.findFile(segment) ?: return
+            }
+            val newName = "${segments.last()}_INVALIDE"
+            current.renameTo(newName)
+        } catch (_: Exception) {
+            Log.e("HomeViewModel", "Failed to rename files for stale activity ${activity.id}")
+        }
+    }
+
+    private fun sanitizeFileName(value: String): String {
+        return value.replace(Regex("""[\\/:*?"<>| ]"""), "_")
+            .replace(Regex("""_+"""), "_")
+            .trim('_')
     }
 }

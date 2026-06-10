@@ -17,7 +17,7 @@ import com.maathisv.vigotrack.data.entities.*
         SensorPatientLinkEntity::class,
         StageEntity::class
     ],
-    version = 5
+    version = 6
 )
 
 abstract class VigoTrackDatabase : RoomDatabase() {

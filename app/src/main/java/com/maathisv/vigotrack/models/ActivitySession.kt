@@ -10,11 +10,13 @@ data class ActivitySession(
     val startTime: Long? = null,
     val endTime: Long? = null,
     val isRunning: Boolean = false,
-    val stageId: Long? = null
+    val stageId: Long? = null,
+    val isStale: Boolean = false
 ) {
     // Determine status based on flags
     val status: ActivityStatus
         get() = when {
+            isStale -> ActivityStatus.STALE
             endTime != null -> ActivityStatus.COMPLETED
             isRunning -> ActivityStatus.IN_PROGRESS
             else -> ActivityStatus.SCHEDULED
@@ -35,5 +37,5 @@ data class ActivitySession(
 }
 
 enum class ActivityStatus {
-    SCHEDULED, IN_PROGRESS, COMPLETED
+    SCHEDULED, IN_PROGRESS, COMPLETED, STALE
 }
