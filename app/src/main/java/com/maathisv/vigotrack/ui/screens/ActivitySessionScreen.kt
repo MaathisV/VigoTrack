@@ -319,7 +319,9 @@ fun SensorDataCard(
     val accX = (sensorData?.get("ACC_X") as? Number)?.toFloat() ?: 0f
     val accY = (sensorData?.get("ACC_Y") as? Number)?.toFloat() ?: 0f
     val accZ = (sensorData?.get("ACC_Z") as? Number)?.toFloat() ?: 0f
-    val accMagnitude = sqrt(accX * accX + accY * accY + accZ * accZ)
+    val rawMag = sqrt(accX * accX + accY * accY + accZ * accZ)
+    val gravityRemoved = if (rawMag >= 1000f) rawMag - 1000f else 1000f - rawMag
+    val accMagnitude = gravityRemoved * 9.81f / 1000f
 
     val features = listOfNotNull(
         if (link.streamHR) FeatureData(
