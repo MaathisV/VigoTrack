@@ -78,66 +78,68 @@ fun ActivitySessionScreen(
                     SessionStatusCard(activity)
                 }
 
-                if (activity.status != ActivityStatus.COMPLETED) {
-                    if (activity.activityType.category != ActivityCategory.BILAN) {
-                        item {
-                            ActivityTypeChips(
-                                activiteTypes = activiteTypes,
-                                bilanTypes = bilanTypes,
-                                selectedType = currentType,
-                                onTypeSelected = { newType ->
-                                    if (newType != currentType) {
+                if (activity.status != ActivityStatus.STALE) {
+                    if (activity.status != ActivityStatus.COMPLETED) {
+                        if (activity.activityType.category != ActivityCategory.BILAN) {
+                            item {
+                                ActivityTypeChips(
+                                    activiteTypes = activiteTypes,
+                                    bilanTypes = bilanTypes,
+                                    selectedType = currentType,
+                                    onTypeSelected = { newType ->
+                                        if (newType != currentType) {
                     if (activity.isRunning) {
-                                            homeViewModel.splitActivityOnTypeChange(
-                                                activity, newType
-                                            ) { newId ->
-                                                onTypeChanged(newId)
+                                                homeViewModel.splitActivityOnTypeChange(
+                                                    activity, newType
+                                                ) { newId ->
+                                                    onTypeChanged(newId)
+                                                }
+                                            } else {
+                                                currentType = newType
+                                                homeViewModel.updateActivityType(activity, newType)
+                                            }
+                                        }
+                                    }
+                                )
+                            }
+                        }
+
+                        item { Text("Patients", style = MaterialTheme.typography.titleMedium) }
+
+                        val displayLinks = buildDisplayLinks(preLinks, activity.links, patients, connectedSensors)
+
+                        if (displayLinks.isEmpty()) {
+                            item { Text("No patients linked. Configure a sensor below.", style = MaterialTheme.typography.bodySmall) }
+                        } else {
+                            items(displayLinks, key = { "${it.sensorId}_${it.patientId}" }) { displayItem ->
+                                val itemKey = "${displayItem.sensorId}_${displayItem.patientId}"
+                                val isChecked = checkedSensorIds[itemKey] ?: false
+                                PatientCheckboxRow(
+                                    displayItem = displayItem,
+                                    isChecked = isChecked,
+                                    onCheckedChange = { checked ->
+                                        checkedSensorIds[itemKey] = checked
+                                        if (checked) {
+                                            val alreadyLinked = activity.links.any { it.sensorId == displayItem.sensorId && it.patientId == displayItem.patientId }
+                                            if (!alreadyLinked) {
+                                                homeViewModel.addLink(
+                                                    activityId,
+                                                    displayItem.patientId,
+                                                    displayItem.patientName,
+                                                    displayItem.sensorId,
+                                                    displayItem.features
+                                                )
+                                            }
+                if (activity.isRunning) {
+                                                homeViewModel.startPatientStream(displayItem.sensorId, displayItem.features)
                                             }
                                         } else {
-                                            currentType = newType
-                                            homeViewModel.updateActivityType(activity, newType)
+                                            homeViewModel.stopPatientStream(displayItem.sensorId)
+                                            homeViewModel.removeLink(activityId, displayItem.sensorId, displayItem.patientId)
                                         }
                                     }
-                                }
-                            )
-                        }
-                    }
-
-                    item { Text("Patients", style = MaterialTheme.typography.titleMedium) }
-
-                    val displayLinks = buildDisplayLinks(preLinks, activity.links, patients, connectedSensors)
-
-                    if (displayLinks.isEmpty()) {
-                        item { Text("No patients linked. Configure a sensor below.", style = MaterialTheme.typography.bodySmall) }
-                    } else {
-                        items(displayLinks, key = { "${it.sensorId}_${it.patientId}" }) { displayItem ->
-                            val itemKey = "${displayItem.sensorId}_${displayItem.patientId}"
-                            val isChecked = checkedSensorIds[itemKey] ?: false
-                            PatientCheckboxRow(
-                                displayItem = displayItem,
-                                isChecked = isChecked,
-                                onCheckedChange = { checked ->
-                                    checkedSensorIds[itemKey] = checked
-                                    if (checked) {
-                                        val alreadyLinked = activity.links.any { it.sensorId == displayItem.sensorId && it.patientId == displayItem.patientId }
-                                        if (!alreadyLinked) {
-                                            homeViewModel.addLink(
-                                                activityId,
-                                                displayItem.patientId,
-                                                displayItem.patientName,
-                                                displayItem.sensorId,
-                                                displayItem.features
-                                            )
-                                        }
-                if (activity.isRunning) {
-                                            homeViewModel.startPatientStream(displayItem.sensorId, displayItem.features)
-                                        }
-                                    } else {
-                                        homeViewModel.stopPatientStream(displayItem.sensorId)
-                                        homeViewModel.removeLink(activityId, displayItem.sensorId, displayItem.patientId)
-                                    }
-                                }
-                            )
+                                )
+                            }
                         }
                     }
 
@@ -382,13 +384,26 @@ fun StartStopControls(activity: ActivitySession, homeViewModel: HomeViewModel, c
         horizontalArrangement = Arrangement.Center
     ) {
         Button(
-            onClick = { homeViewModel.toggleSession(activity, checkedKeys) },
-            colors = if (activity.isRunning)
-                ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-            else ButtonDefaults.buttonColors(),
+            onClick = {
+                when (activity.status) {
+                    ActivityStatus.COMPLETED -> homeViewModel.resumeActivity(activity)
+                    else -> homeViewModel.toggleSession(activity, checkedKeys)
+                }
+            },
+            colors = when {
+                activity.isRunning -> ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                activity.status == ActivityStatus.COMPLETED -> ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
+                else -> ButtonDefaults.buttonColors()
+            },
             modifier = Modifier.fillMaxWidth().height(56.dp)
         ) {
-            Text(if (activity.isRunning) "STOP SESSION" else "START SESSION")
+            Text(
+                when (activity.status) {
+                    ActivityStatus.COMPLETED -> "REPRENDRE"
+                    ActivityStatus.IN_PROGRESS -> "STOP SESSION"
+                    else -> "START SESSION"
+                }
+            )
         }
     }
 }

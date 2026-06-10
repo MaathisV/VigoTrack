@@ -358,6 +358,29 @@ class HomeViewModel(
         }
     }
 
+    fun resumeActivity(activity: ActivitySession) {
+        viewModelScope.launch {
+            val resumed = activity.copy(endTime = null, isRunning = true)
+            activityRepo.updateActivity(resumed)
+            sensorRepo.startActivityStreaming(resumed)
+
+            val sensorIds = resumed.links.map { it.sensorId }.toTypedArray()
+            val stageName = resumed.stageId?.let { id ->
+                stages.value.find { it.id == id }?.name
+            } ?: "NoStage"
+            val intent = Intent(getApplication(), PolarService::class.java).apply {
+                action = ACTION_START_STREAMS
+                putExtra(EXTRA_SENSOR_IDS, sensorIds)
+                putExtra(EXTRA_ACTIVITY_NAME, resumed.activityType.displayName)
+                putExtra(EXTRA_ACTIVITY_CATEGORY, resumed.activityType.category.name)
+                putExtra(EXTRA_PATIENT_NAME, resumed.links.firstOrNull()?.patientName ?: "")
+                putExtra(EXTRA_STAGE_NAME, stageName)
+                putExtra(EXTRA_SESSION_DATE, System.currentTimeMillis())
+            }
+            getApplication<Application>().startService(intent)
+        }
+    }
+
     fun stopPatientStream(sensorId: String) {
         viewModelScope.launch {
             sensorRepo.stopActivityStreaming(sensorId)
