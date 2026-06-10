@@ -447,6 +447,14 @@ class HomeViewModel(
         }
     }
 
+    fun unmarkActivityAsStale(activityId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val activities = activityRepo.allActivities.first()
+            val activity = activities.find { it.id == activityId } ?: return@launch
+            activityRepo.updateActivity(activity.copy(isStale = false))
+        }
+    }
+
     private suspend fun renameActivityFiles(activity: ActivitySession) {
         val uriString = currentLogUri.value
         if (uriString.isBlank()) return

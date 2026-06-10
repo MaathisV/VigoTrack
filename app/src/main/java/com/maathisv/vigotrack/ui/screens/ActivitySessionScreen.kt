@@ -3,6 +3,8 @@ package com.maathisv.vigotrack.ui.screens
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -76,7 +78,11 @@ fun ActivitySessionScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 item {
-                    SessionStatusCard(activity)
+                    SessionStatusCard(
+                        activity = activity,
+                        onMarkStale = { homeViewModel.markActivityAsStale(activityId) },
+                        onUnmarkStale = { homeViewModel.unmarkActivityAsStale(activityId) }
+                    )
                 }
 
                 if (activity.status != ActivityStatus.STALE) {
@@ -412,19 +418,61 @@ fun StartStopControls(activity: ActivitySession, homeViewModel: HomeViewModel, c
 }
 
 @Composable
-fun SessionStatusCard(activity: ActivitySession) {
+fun SessionStatusCard(
+    activity: ActivitySession,
+    onMarkStale: () -> Unit = {},
+    onUnmarkStale: () -> Unit = {}
+) {
     val dateFormat = remember { SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()) }
+    var showMenu by remember { mutableStateOf(false) }
 
     Card(
-        modifier = Modifier.fillMaxWidth().padding(8.dp)
+        modifier = Modifier.fillMaxWidth().padding(8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (activity.isStale) MaterialTheme.colorScheme.errorContainer
+                             else MaterialTheme.colorScheme.surface
+        )
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "Status: ${activity.status}",
-                style = MaterialTheme.typography.headlineSmall
-            )
-            Text(text = "Type: ${activity.activityType.displayName}")
-            Text(text = "Date: ${dateFormat.format(Date(activity.scheduledDate))}")
+        Column(modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 16.dp, end = 8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (activity.isStale) "INVALIDÉ" else "Status: ${activity.status}",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = if (activity.isStale) MaterialTheme.colorScheme.onErrorContainer
+                                else MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(text = "Type: ${activity.activityType.displayName}")
+                    Text(text = "Date: ${dateFormat.format(Date(activity.scheduledDate))}")
+                }
+                Box {
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "Plus")
+                    }
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false }
+                    ) {
+                        if (activity.isStale) {
+                            DropdownMenuItem(
+                                text = { Text("Annuler l'invalidation") },
+                                onClick = {
+                                    showMenu = false
+                                    onUnmarkStale()
+                                }
+                            )
+                        } else {
+                            DropdownMenuItem(
+                                text = { Text("Invalider") },
+                                onClick = {
+                                    showMenu = false
+                                    onMarkStale()
+                                }
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }

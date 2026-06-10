@@ -92,6 +92,7 @@ fun BilanScreen(
                         completedMap = completedMap,
                         onClick = { bilanType ->
                             val existing = activities.find { a ->
+                                !a.isStale &&
                                 a.activityType == bilanType &&
                                 a.links.any { it.patientId == patient.id }
                             }
@@ -217,7 +218,8 @@ private fun PatientBilanRow(
 private fun buildCompletedMap(activities: List<ActivitySession>): Map<Pair<Long, String>, Boolean> {
     val map = mutableMapOf<Pair<Long, String>, Boolean>()
     activities.forEach { activity ->
-        if (activity.activityType.category == ActivityCategory.BILAN &&
+        if (!activity.isStale &&
+            activity.activityType.category == ActivityCategory.BILAN &&
             activity.status == ActivityStatus.COMPLETED
         ) {
             activity.links.forEach { link ->
