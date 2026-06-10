@@ -365,22 +365,48 @@ fun SensorDataCard(
         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(text = "Patient: ${link.patientName}", style = MaterialTheme.typography.titleMedium)
-            Text(text = "Sensor: ${sensorName ?: link.sensorId}", style = MaterialTheme.typography.labelSmall)
+        Row(
+            modifier = Modifier.padding(16.dp).height(IntrinsicSize.Min)
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = "Patient: ${link.patientName}", style = MaterialTheme.typography.titleMedium)
+                Text(text = "Sensor: ${sensorName ?: link.sensorId}", style = MaterialTheme.typography.labelSmall)
 
-            Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                rows.forEach { row ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        row.forEach { f -> FeatureCell(f, Modifier.weight(1f)) }
-                        repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    rows.forEach { row ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            row.forEach { f -> FeatureCell(f, Modifier.weight(1f)) }
+                            repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                        }
                     }
                 }
+            }
+
+            VerticalDivider(
+                modifier = Modifier
+                    .height(IntrinsicSize.Min)
+                    .padding(horizontal = 12.dp)
+            )
+
+            Column(
+                modifier = Modifier.width(70.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Intensité",
+                    style = MaterialTheme.typography.labelSmall
+                )
+                Text(
+                    text = "--",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
             }
         }
     }
