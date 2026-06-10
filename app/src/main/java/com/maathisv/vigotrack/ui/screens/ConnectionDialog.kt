@@ -53,12 +53,12 @@ fun ConnectionDialog(
                 Tab(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
-                    text = { Text("Devices") }
+                    text = { Text("Appareils") }
                 )
                 Tab(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
-                    text = { Text("Links") }
+                    text = { Text("Liens") }
                 )
                 Tab(
                     selected = selectedTab == 2,
@@ -68,7 +68,7 @@ fun ConnectionDialog(
                 Tab(
                     selected = selectedTab == 3,
                     onClick = { selectedTab = 3 },
-                    text = { Text("Settings") }
+                    text = { Text("Paramètres") }
                 )
             }
         },
@@ -109,7 +109,7 @@ fun ConnectionDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Close") }
+            TextButton(onClick = onDismiss) { Text("Fermer") }
         }
     )
 }
@@ -126,7 +126,7 @@ private fun DeviceTab(
 ) {
     Column(modifier = Modifier.fillMaxWidth().heightIn(max = 450.dp)) {
         Text(
-            text = "Connected Devices",
+            text = "Appareils connectés",
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary
         )
@@ -136,7 +136,7 @@ private fun DeviceTab(
 
         if (connectedDevicesList.isEmpty()) {
             Text(
-                text = "No devices currently connected",
+                text = "Aucun appareil connecté actuellement",
                 modifier = Modifier.padding(vertical = 12.dp),
                 style = MaterialTheme.typography.bodySmall
             )
@@ -146,8 +146,8 @@ private fun DeviceTab(
                     val state = deviceConnectionStates[sensor.deviceId]
                     val isConnecting = state == ConnectionState.CONNECTING
                     val stateSuffix = when (state) {
-                        ConnectionState.FEATURES_READY -> " (Ready)"
-                        ConnectionState.CONNECTING -> " (Connecting...)"
+                        ConnectionState.FEATURES_READY -> " (Prêt)"
+                        ConnectionState.CONNECTING -> " (Connexion…)"
                         else -> ""
                     }
 
@@ -162,7 +162,7 @@ private fun DeviceTab(
                             OutlinedTextField(
                                 value = renameText,
                                 onValueChange = { renameText = it },
-                                label = { Text("Custom name") },
+                                label = { Text("Nom personnalisé") },
                                 singleLine = true,
                                 modifier = Modifier.weight(1f)
                             )
@@ -171,15 +171,15 @@ private fun DeviceTab(
                                     onRenameSensor(sensor.deviceId, renameText.trim())
                                 }
                                 renamingDeviceId = null
-                            }) { Text("Save") }
-                            TextButton(onClick = { renamingDeviceId = null }) { Text("Cancel") }
+                            }) { Text("Enregistrer") }
+                            TextButton(onClick = { renamingDeviceId = null }) { Text("Annuler") }
                         }
                     } else {
                         ListItem(
                             headlineContent = {
                                 Text("${sensor.effectiveName}$stateSuffix")
                             },
-                            supportingContent = { Text("ID: ${sensor.deviceId}") },
+                                supportingContent = { Text("ID : ${sensor.deviceId}") },
                             trailingContent = {
                                 if (isConnecting) {
                                     CircularProgressIndicator(modifier = Modifier.size(24.dp))
@@ -188,9 +188,9 @@ private fun DeviceTab(
                                         TextButton(onClick = {
                                             renameText = sensor.effectiveName
                                             renamingDeviceId = sensor.deviceId
-                                        }) { Text("Rename") }
+                                        }) { Text("Renommer") }
                                         TextButton(onClick = { onDisconnect(sensor.deviceId) }) {
-                                            Text("Disconnect", color = MaterialTheme.colorScheme.error)
+                                            Text("Déconnecter", color = MaterialTheme.colorScheme.error)
                                         }
                                     }
                                 }
@@ -204,7 +204,7 @@ private fun DeviceTab(
         HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
         Text(
-            text = "Available Nearby",
+            text = "Disponibles à proximité",
             style = MaterialTheme.typography.labelLarge
         )
 
@@ -219,7 +219,7 @@ private fun DeviceTab(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)
             ) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                Text("Searching...", style = MaterialTheme.typography.bodySmall)
+                Text("Recherche…", style = MaterialTheme.typography.bodySmall)
             }
         } else {
             LazyColumn(modifier = Modifier.weight(1f)) {
@@ -230,9 +230,9 @@ private fun DeviceTab(
                         headlineContent = { Text(sensor.effectiveName) },
                         supportingContent = {
                             if (isThisDeviceConnecting) {
-                                Text("Initiating connection...", color = MaterialTheme.colorScheme.secondary)
+                                Text("Initialisation de la connexion…", color = MaterialTheme.colorScheme.secondary)
                             } else {
-                                Text("ID: ${sensor.deviceId}")
+                                Text("ID : ${sensor.deviceId}")
                             }
                         },
                         trailingContent = {
@@ -240,7 +240,7 @@ private fun DeviceTab(
                                 CircularProgressIndicator(modifier = Modifier.size(24.dp))
                             } else {
                                 Button(onClick = { onConnect(sensor) }) {
-                                    Text("Connect")
+                                    Text("Connecter")
                                 }
                             }
                         }
@@ -264,7 +264,7 @@ private fun LinksTab(
 
     Column(modifier = Modifier.fillMaxWidth().heightIn(max = 450.dp)) {
         Text(
-            text = "Patient-Sensor Links",
+            text = "Liens patient-capteur",
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary
         )
@@ -274,29 +274,29 @@ private fun LinksTab(
         Button(
             onClick = { showAddDialog = true },
             modifier = Modifier.fillMaxWidth()
-        ) { Text("New Link") }
+        ) { Text("Nouveau lien") }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
         if (sensorPatientLinks.isEmpty()) {
             Text(
-                text = "No links configured. Add one to auto-link patients in new sessions.",
+                text = "Aucun lien configuré. Ajoutez-en un pour lier automatiquement les patients dans les nouvelles sessions.",
                 modifier = Modifier.padding(vertical = 12.dp),
                 style = MaterialTheme.typography.bodySmall
             )
         } else {
             LazyColumn(modifier = Modifier.weight(1f)) {
                 items(sensorPatientLinks, key = { it.id }) { link ->
-                    val patientName = patients.find { it.id == link.patientId }?.name ?: "Unknown"
+                    val patientName = patients.find { it.id == link.patientId }?.name ?: "Inconnu"
                     val sensorName = connectedDevicesList.find { it.deviceId == link.sensorId }?.effectiveName ?: link.sensorId
                     ListItem(
                         headlineContent = { Text("$patientName → $sensorName") },
-                        supportingContent = { Text("Features: ${link.features.joinToString(", ")}") },
+                        supportingContent = { Text("Fonctionnalités : ${link.features.joinToString(", ")}") },
                         trailingContent = {
                             IconButton(onClick = { onDeleteLink(link) }) {
                                 Icon(
                                     imageVector = Icons.Default.Delete,
-                                    contentDescription = "Delete link",
+                                    contentDescription = "Supprimer le lien",
                                     tint = MaterialTheme.colorScheme.error
                                 )
                             }
@@ -339,14 +339,14 @@ private fun AddLinkDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("New Patient-Sensor Link") },
+        title = { Text("Nouveau lien patient-capteur") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 ExposedDropdownMenuBox(
                     expanded = patientDropdownExpanded,
                     onExpandedChange = { patientDropdownExpanded = it }
                 ) {
-                    val selectedPatientName = patients.find { it.id == selectedPatientId }?.name ?: "Select a patient"
+                    val selectedPatientName = patients.find { it.id == selectedPatientId }?.name ?: "Sélectionner un patient"
                     OutlinedTextField(
                         value = selectedPatientName,
                         onValueChange = {},
@@ -377,10 +377,10 @@ private fun AddLinkDialog(
                 ) {
                     val selectedSensorName = sensors.find { it.deviceId == selectedSensorId }?.effectiveName ?: selectedSensorId
                     OutlinedTextField(
-                        value = selectedSensorName.ifEmpty { "Select a sensor" },
+                        value = selectedSensorName.ifEmpty { "Sélectionner un capteur" },
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Sensor") },
+                        label = { Text("Capteur") },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = sensorDropdownExpanded) },
                         modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true).fillMaxWidth()
                     )
@@ -400,19 +400,19 @@ private fun AddLinkDialog(
                     }
                 }
 
-                Text("Default Features", style = MaterialTheme.typography.labelSmall)
+                Text("Fonctionnalités par défaut", style = MaterialTheme.typography.labelSmall)
                 Column {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = hrEnabled, onCheckedChange = { hrEnabled = it })
-                        Text("Heart Rate (HR)")
+                        Text("Fréquence cardiaque (HR)")
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = ppiEnabled, onCheckedChange = { ppiEnabled = it })
-                        Text("PP Interval (PPI)")
+                        Text("Intervalle PP (PPI)")
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = accEnabled, onCheckedChange = { accEnabled = it })
-                        Text("Accelerometer (ACC)")
+                        Text("Accéléromètre (ACC)")
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = ecgEnabled, onCheckedChange = { ecgEnabled = it })
@@ -432,10 +432,10 @@ private fun AddLinkDialog(
                     onConfirm(selectedPatientId, selectedSensorId, features)
                 },
                 enabled = selectedPatientId != null && selectedSensorId.isNotBlank()
-            ) { Text("Create Link") }
+            ) { Text("Créer le lien") }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text("Annuler") }
         }
     )
 }
@@ -450,7 +450,7 @@ private fun PatientTab(
 
     Column(modifier = Modifier.fillMaxWidth().heightIn(max = 450.dp)) {
         Text(
-            text = "Add New Patient",
+            text = "Ajouter un patient",
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary
         )
@@ -465,7 +465,7 @@ private fun PatientTab(
             OutlinedTextField(
                 value = patientName,
                 onValueChange = { patientName = it },
-                label = { Text("Patient Name") },
+                label = { Text("Nom du patient") },
                 modifier = Modifier.weight(1f),
                 singleLine = true
             )
@@ -477,14 +477,14 @@ private fun PatientTab(
                     }
                 }
             ) {
-                Text("Add")
+                Text("Ajouter")
             }
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
 
         Text(
-            text = "Saved Patients",
+            text = "Patients enregistrés",
             style = MaterialTheme.typography.labelLarge
         )
 
@@ -492,7 +492,7 @@ private fun PatientTab(
 
         if (patients.isEmpty()) {
             Text(
-                text = "No patients saved yet",
+                text = "Aucun patient enregistré",
                 modifier = Modifier.padding(vertical = 12.dp),
                 style = MaterialTheme.typography.bodySmall
             )
@@ -501,12 +501,12 @@ private fun PatientTab(
                 items(patients, key = { it.id }) { patient ->
                     ListItem(
                         headlineContent = { Text(patient.name) },
-                        supportingContent = { Text("ID: ${patient.id}") },
+                        supportingContent = { Text("ID : ${patient.id}") },
                         trailingContent = {
                             IconButton(onClick = { onDeletePatient(patient) }) {
                                 Icon(
                                     imageVector = Icons.Default.Delete,
-                                    contentDescription = "Delete patient",
+                                    contentDescription = "Supprimer le patient",
                                     tint = MaterialTheme.colorScheme.error
                                 )
                             }
@@ -539,7 +539,7 @@ private fun SettingsTab(
             .verticalScroll(rememberScrollState())
     ) {
         Text(
-            text = "Export Folder",
+            text = "Dossier d'exportation",
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary
         )
@@ -547,17 +547,17 @@ private fun SettingsTab(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "Data files are saved to the selected folder. Use \"/\" in the template to create subfolders.",
+            text = "Les fichiers de données sont enregistrés dans le dossier sélectionné. Utilisez \"/\" dans le modèle pour créer des sous-dossiers.",
             style = MaterialTheme.typography.bodySmall
         )
 
         Spacer(modifier = Modifier.height(12.dp))
 
         OutlinedTextField(
-            value = if (currentLogUri.isBlank()) "No folder selected" else currentLogUri,
+            value = if (currentLogUri.isBlank()) "Aucun dossier sélectionné" else currentLogUri,
             onValueChange = {},
             readOnly = true,
-            label = { Text("Current Folder URI") },
+            label = { Text("URI du dossier actuel") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
@@ -565,13 +565,13 @@ private fun SettingsTab(
         Spacer(modifier = Modifier.height(16.dp))
 
         Button(onClick = onPickLogFolder) {
-            Text("Change Export Folder")
+            Text("Changer le dossier d'exportation")
         }
 
         HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
         Text(
-            text = "File Naming Template",
+            text = "Modèle de nommage des fichiers",
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary
         )
@@ -581,7 +581,7 @@ private fun SettingsTab(
         OutlinedTextField(
             value = namingTemplate,
             onValueChange = onTemplateChange,
-            label = { Text("Template") },
+            label = { Text("Modèle") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
@@ -590,10 +590,10 @@ private fun SettingsTab(
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TextButton(onClick = onResetTemplate) {
-                Text("Reset to Default")
+                Text("Réinitialiser")
             }
             TextButton(onClick = { showPlaceholders = true }) {
-                Text("Placeholders...")
+                Text("Espaces réservés…")
             }
         }
 
@@ -641,28 +641,28 @@ private fun SettingsTab(
     if (showPlaceholders) {
         AlertDialog(
             onDismissRequest = { showPlaceholders = false },
-            title = { Text("Available Placeholders") },
+            title = { Text("Espaces réservés disponibles") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("{stage} - Stage name")
-                    Text("{patient} - Patient name")
-                    Text("{category} - Activity category (BILAN / ACTIVITE)")
-                    Text("{activity} - Activity type (e.g. MARCHE, TDM6)")
-                    Text("{sensor} - Sensor identifier")
-                    Text("{device} - Alias for {sensor}")
-                    Text("{tag} - Data stream type (HR, PPI, ACC, ECG)")
-                    Text("{date} - Date (YYYY-MM-DD)")
-                    Text("{time} - Time (HH-MM-SS)")
-                    Text("{datetime} - Combined date_time")
-                    Text("{timestamp} - Unix epoch ms")
+                    Text("{stage} - Nom du Stage")
+                    Text("{patient} - Nom du patient")
+                    Text("{category} - Catégorie d'activité (BILAN / ACTIVITÉ)")
+                    Text("{activity} - Type d'activité (ex. MARCHE, TDM6)")
+                    Text("{sensor} - Identifiant du capteur")
+                    Text("{device} - Alias de {sensor}")
+                    Text("{tag} - Type de flux de données (HR, PPI, ACC, ECG)")
+                    Text("{date} - Date (AAAA-MM-JJ)")
+                    Text("{time} - Heure (HH-MM-SS)")
+                    Text("{datetime} - Date_heure combinée")
+                    Text("{timestamp} - Timestamp Unix (ms)")
                     Text("")
-                    Text("Use / in your template to create folder levels.")
-                    Text("Default: {stage}/{patient}/{category}/{activity}_{datetime}/{sensor}_{tag}")
+                    Text("Utilisez / dans votre modèle pour créer des niveaux de dossiers.")
+                    Text("Défaut : {stage}/{patient}/{category}/{activity}_{datetime}/{sensor}_{tag}")
                 }
             },
             confirmButton = {
                 TextButton(onClick = { showPlaceholders = false }) {
-                    Text("Close")
+                    Text("Fermer")
                 }
             }
         )

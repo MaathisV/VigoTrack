@@ -82,7 +82,7 @@ fun StagesListScreen(
         },
         floatingActionButton = {
             FloatingActionButton(onClick = { showCreateDialog = true }) {
-                Icon(Icons.Default.Add, contentDescription = "Create Stage")
+                Icon(Icons.Default.Add, contentDescription = "Créer un Stage")
             }
         }
     ) { padding ->
@@ -94,7 +94,7 @@ fun StagesListScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             if (stages.isEmpty()) {
-                item { Text("No stages yet. Tap + to create one.") }
+                item { Text("Aucun stage. Appuyez sur + pour en créer un.") }
             } else {
                 items(stages, key = { it.id }) { stage ->
                     StageCard(stage = stage, onClick = { onStageClick(stage.id) })
@@ -185,13 +185,13 @@ private fun CreateStageDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("New Stage") },
+        title = { Text("Nouveau Stage") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Stage Name") },
+                    label = { Text("Nom du Stage") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -233,10 +233,10 @@ private fun CreateStageDialog(
             Button(
                 onClick = { onConfirm(name, startDate, endDate) },
                 enabled = name.isNotBlank()
-            ) { Text("Create") }
+            ) { Text("Créer") }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
+            TextButton(onClick = onDismiss) { Text("Annuler") }
         }
     )
 
@@ -257,7 +257,7 @@ private fun CreateStageDialog(
                     }) { Text("OK") }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showStartPicker = false }) { Text("Cancel") }
+                    TextButton(onClick = { showStartPicker = false }) { Text("Annuler") }
                 }
             ) { DatePicker(state = state) }
         }
@@ -275,7 +275,7 @@ private fun CreateStageDialog(
                     }) { Text("OK") }
                 },
                 dismissButton = {
-                    TextButton(onClick = { showEndPicker = false }) { Text("Cancel") }
+                    TextButton(onClick = { showEndPicker = false }) { Text("Annuler") }
                 }
             ) { DatePicker(state = state) }
         }

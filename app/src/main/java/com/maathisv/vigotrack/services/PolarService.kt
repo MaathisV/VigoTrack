@@ -142,15 +142,15 @@ class PolarService : LifecycleService() {
 
         val channel = NotificationChannel(
             channelId,
-            "Heart Rate Tracking",
+            "Suivi de la fréquence cardiaque",
             NotificationManager.IMPORTANCE_LOW
         )
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(channel)
 
         return NotificationCompat.Builder(this, channelId)
-            .setContentTitle("VigoTrack Active")
-            .setContentText("Monitoring Polar sensors in background...")
+            .setContentTitle("VigoTrack Actif")
+            .setContentText("Surveillance des capteurs Polar en arrière-plan…")
             .setSmallIcon(R.drawable.ic_launcher_foreground) // Use a valid icon from your res/drawable
             .setOngoing(true) // Keeps the notification from being swiped away
             .setPriority(NotificationCompat.PRIORITY_LOW)

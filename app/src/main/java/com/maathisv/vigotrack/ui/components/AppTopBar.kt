@@ -33,7 +33,7 @@ fun AppTopBar(
                 IconButton(onClick = it) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back"
+                        contentDescription = "Retour"
                     )
                 }
             }
@@ -43,7 +43,7 @@ fun AppTopBar(
                 IconButton(onClick = it) {
                     Icon(
                         imageVector = Icons.Default.Settings,
-                        contentDescription = "Device Management"
+                        contentDescription = "Gestion des appareils"
                     )
                 }
             }

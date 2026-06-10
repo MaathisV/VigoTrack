@@ -37,11 +37,11 @@ fun CreateActivityCard(onClick: () -> Unit) {
         ) {
             Icon(
                 imageVector = Icons.Default.Add,
-                contentDescription = "Add Activity",
+                contentDescription = "Ajouter une activité",
                 modifier = Modifier.size(40.dp)
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Text("New Session", fontWeight = FontWeight.Bold)
+            Text("Nouvelle session", fontWeight = FontWeight.Bold)
         }
     }
 }

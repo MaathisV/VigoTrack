@@ -68,7 +68,7 @@ fun ActivitySessionScreen(
             Box(
                 modifier = Modifier.fillMaxSize().padding(padding),
                 contentAlignment = Alignment.Center
-            ) { Text("Activity not found") }
+            ) { Text("Activité non trouvée") }
         } else {
             LazyColumn(
                 modifier = Modifier
@@ -116,7 +116,7 @@ fun ActivitySessionScreen(
                         val displayLinks = buildDisplayLinks(preLinks, activity.links, patients, connectedSensors)
 
                         if (displayLinks.isEmpty()) {
-                            item { Text("No patients linked. Configure a sensor below.", style = MaterialTheme.typography.bodySmall) }
+                            item { Text("Aucun patient lié. Configurez un capteur ci-dessous.", style = MaterialTheme.typography.bodySmall) }
                         } else {
                             items(displayLinks, key = { "${it.sensorId}_${it.patientId}" }) { displayItem ->
                                 val itemKey = "${displayItem.sensorId}_${displayItem.patientId}"
@@ -154,10 +154,10 @@ fun ActivitySessionScreen(
                 }
 
                 if (activity.status != ActivityStatus.SCHEDULED) {
-                    item { Text("Live Data", style = MaterialTheme.typography.titleMedium) }
+                    item { Text("Données en direct", style = MaterialTheme.typography.titleMedium) }
                     val activeLinks = activity.links.filter { checkedSensorIds["${it.sensorId}_${it.patientId}"] == true }
                     if (activeLinks.isEmpty()) {
-                        item { Text("No active sensors.", style = MaterialTheme.typography.bodySmall) }
+                        item { Text("Aucun capteur actif.", style = MaterialTheme.typography.bodySmall) }
                     } else {
                         items(activeLinks) { link ->
                             val sensorName = connectedSensors.find { it.deviceId == link.sensorId }?.effectiveName
@@ -197,7 +197,7 @@ private fun buildDisplayLinks(
         result.add(
             DisplayLink(
                 patientId = link.patientId,
-                patientName = patient?.name ?: "Unknown",
+                patientName = patient?.name ?: "Inconnu",
                 sensorId = link.sensorId,
                 sensorDisplayName = sensor?.effectiveName,
                 features = link.features
@@ -231,7 +231,7 @@ private fun ActivityTypeChips(
     onTypeSelected: (ActivityType) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Activity Type", style = MaterialTheme.typography.labelMedium)
+        Text("Type d'activité", style = MaterialTheme.typography.labelMedium)
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -369,8 +369,8 @@ fun SensorDataCard(
             modifier = Modifier.padding(16.dp).height(IntrinsicSize.Min)
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = "Patient: ${link.patientName}", style = MaterialTheme.typography.titleMedium)
-                Text(text = "Sensor: ${sensorName ?: link.sensorId}", style = MaterialTheme.typography.labelSmall)
+                Text(text = "Patient : ${link.patientName}", style = MaterialTheme.typography.titleMedium)
+                Text(text = "Capteur : ${sensorName ?: link.sensorId}", style = MaterialTheme.typography.labelSmall)
 
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -435,8 +435,8 @@ fun StartStopControls(activity: ActivitySession, homeViewModel: HomeViewModel, c
             Text(
                 when (activity.status) {
                     ActivityStatus.COMPLETED -> "REPRENDRE"
-                    ActivityStatus.IN_PROGRESS -> "STOP SESSION"
-                    else -> "START SESSION"
+                    ActivityStatus.IN_PROGRESS -> "ARRÊTER LA SESSION"
+                    else -> "DÉMARRER LA SESSION"
                 }
             )
         }
@@ -463,13 +463,13 @@ fun SessionStatusCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = if (activity.isStale) "INVALIDÉ" else "Status: ${activity.status}",
+                        text = if (activity.isStale) "INVALIDÉ" else "Statut : ${activity.status}",
                         style = MaterialTheme.typography.headlineSmall,
                         color = if (activity.isStale) MaterialTheme.colorScheme.onErrorContainer
                                 else MaterialTheme.colorScheme.onSurface
                     )
-                    Text(text = "Type: ${activity.activityType.displayName}")
-                    Text(text = "Date: ${dateFormat.format(Date(activity.scheduledDate))}")
+                    Text(text = "Type : ${activity.activityType.displayName}")
+                    Text(text = "Date : ${dateFormat.format(Date(activity.scheduledDate))}")
                 }
                 Box {
                     IconButton(onClick = { showMenu = true }) {

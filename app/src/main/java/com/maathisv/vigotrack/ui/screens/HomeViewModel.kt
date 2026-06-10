@@ -285,7 +285,7 @@ class HomeViewModel(
                         pair in checkedPairs && pair !in existingLinks
                     }
                     .forEach { link ->
-                        val patientName = patients.value.find { it.id == link.patientId }?.name ?: "Unknown"
+                        val patientName = patients.value.find { it.id == link.patientId }?.name ?: "Inconnu"
                         val finalPatientId = if (link.patientId != null && patients.value.any { it.id == link.patientId }) {
                             link.patientId
                         } else {

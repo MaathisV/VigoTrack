@@ -77,7 +77,7 @@ fun BilanScreen(
             Box(
                 modifier = Modifier.fillMaxSize().padding(padding),
                 contentAlignment = Alignment.Center
-            ) { Text("No patients registered.") }
+            ) { Text("Aucun patient enregistré.") }
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
@@ -206,7 +206,7 @@ private fun PatientBilanRow(
                 if (isCompleted) {
                     Icon(
                         imageVector = Icons.Default.Check,
-                        contentDescription = "Completed",
+                        contentDescription = "Terminé",
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }

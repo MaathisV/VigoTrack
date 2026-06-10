@@ -80,7 +80,7 @@ fun StageDetailScreen(
             Box(
                 modifier = Modifier.fillMaxSize().padding(padding),
                 contentAlignment = Alignment.Center
-            ) { Text("Stage not found") }
+            ) { Text("Stage non trouvé") }
         } else {
             StageDetailContent(
                 stage = stage,
@@ -177,15 +177,15 @@ private fun StageDetailContent(
             Button(
                 onClick = onRecordClick,
                 modifier = Modifier.fillMaxWidth().height(56.dp)
-            ) { Text("Record", style = MaterialTheme.typography.titleMedium) }
+            ) { Text("Enregistrer", style = MaterialTheme.typography.titleMedium) }
         }
 
         item {
-            Text("Activities", style = MaterialTheme.typography.titleMedium)
+            Text("Activités", style = MaterialTheme.typography.titleMedium)
         }
 
         if (activities.isEmpty()) {
-            item { Text("No activities yet for this stage.", style = MaterialTheme.typography.bodySmall) }
+            item { Text("Aucune activité pour ce stage.", style = MaterialTheme.typography.bodySmall) }
         } else {
             activitiesByDay.forEach { (day, dayActivities) ->
                 item {
@@ -211,7 +211,7 @@ private fun StageDetailContent(
         //         .distinctBy { it.patientId }
         //         .mapNotNull { link -> patients.find { it.id == link.patientId } }
         //     if (patientsInStage.isEmpty()) {
-        //         item { Text("No patients linked yet.", style = MaterialTheme.typography.bodySmall) }
+        //         item { Text("Aucun patient lié.", style = MaterialTheme.typography.bodySmall) }
         //     } else {
         //         patientsInStage.forEach { patient ->
         //             val patientActivities = activities.filter { act ->
@@ -351,11 +351,11 @@ private fun ActivityRow(session: ActivitySession, onClick: () -> Unit, onMarkSta
 }
 
 private fun formatDuration(startTime: Long?, endTime: Long?, isRunning: Boolean): String? {
-    if (isRunning) return "Running…"
+    if (isRunning) return "En cours…"
     if (startTime != null && endTime != null) {
         val diffMs = endTime - startTime
         val totalMinutes = diffMs / 60_000
-        if (totalMinutes < 1) return "< 1min"
+        if (totalMinutes < 1) return "< 1 min"
         return if (totalMinutes < 60) {
             "${totalMinutes}min"
         } else {
