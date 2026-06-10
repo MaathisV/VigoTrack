@@ -62,6 +62,10 @@ class PolarService : LifecycleService() {
                 val uriString = prefs.getString("log_uri", null)
                 val template = prefs.getString("file_naming_template", null) ?: DEFAULT_TEMPLATE
 
+                val logFeatures = setOf("HR", "PPI", "ACC", "ECG").filter {
+                    prefs.getBoolean("log_$it", true)
+                }.toSet()
+
                 if (uriString != null) {
                     startForeground(NOTIFICATION_ID, createNotification())
                     sensorIds.forEach { sensorId ->
@@ -81,7 +85,7 @@ class PolarService : LifecycleService() {
                             applicationContext, uriString.toUri(), template, staticValues
                         )
                     }
-                    observeSensorData()
+                    observeSensorData(logFeatures)
                 }
             }
             ACTION_STOP_STREAMS -> {
@@ -91,35 +95,43 @@ class PolarService : LifecycleService() {
         return START_STICKY
     }
 
-    private fun observeSensorData() {
+    private fun observeSensorData(logFeatures: Set<String> = setOf("HR", "PPI", "ACC", "ECG")) {
         lifecycleScope.launch {
             repository.hrLogFlow.collect { (deviceId, data) ->
                 val logger = loggers[deviceId] ?: return@collect
-                data.samples.forEach { s -> onHrReceived(logger, s) }
+                if ("HR" in logFeatures) {
+                    data.samples.forEach { s -> onHrReceived(logger, s) }
+                }
             }
         }
         lifecycleScope.launch {
             repository.ppiLogFlow.collect { (deviceId, data) ->
                 val logger = loggers[deviceId] ?: return@collect
-                data.samples.forEach { s ->
-                    onPpiReceived(logger, s.timeStamp.toLong(), s.ppi, s.errorEstimate, s.hr,
-                        s.blockerBit, s.skinContactStatus, s.skinContactSupported)
+                if ("PPI" in logFeatures) {
+                    data.samples.forEach { s ->
+                        onPpiReceived(logger, s.timeStamp.toLong(), s.ppi, s.errorEstimate, s.hr,
+                            s.blockerBit, s.skinContactStatus, s.skinContactSupported)
+                    }
                 }
             }
         }
         lifecycleScope.launch {
             repository.accLogFlow.collect { (deviceId, data) ->
                 val logger = loggers[deviceId] ?: return@collect
-                data.samples.forEach { s ->
-                    onAccReceived(logger, s.timeStamp, s.x, s.y, s.z)
+                if ("ACC" in logFeatures) {
+                    data.samples.forEach { s ->
+                        onAccReceived(logger, s.timeStamp, s.x, s.y, s.z)
+                    }
                 }
             }
         }
         lifecycleScope.launch {
             repository.ecgLogFlow.collect { (deviceId, data) ->
                 val logger = loggers[deviceId] ?: return@collect
-                data.samples.forEach { s ->
-                    onEcgReceived(logger, s)
+                if ("ECG" in logFeatures) {
+                    data.samples.forEach { s ->
+                        onEcgReceived(logger, s)
+                    }
                 }
             }
         }

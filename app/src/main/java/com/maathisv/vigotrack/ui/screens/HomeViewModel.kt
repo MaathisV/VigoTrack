@@ -90,6 +90,45 @@ class HomeViewModel(
     private val _namingTemplate = MutableStateFlow(getFileNamingTemplate())
     val namingTemplate: StateFlow<String> = _namingTemplate.asStateFlow()
 
+    private val _showFeatures = MutableStateFlow(getFeatureSettings("show"))
+    val showFeatures: StateFlow<Map<String, Boolean>> = _showFeatures.asStateFlow()
+
+    private val _logFeatures = MutableStateFlow(getFeatureSettings("log"))
+    val logFeatures: StateFlow<Map<String, Boolean>> = _logFeatures.asStateFlow()
+
+    private fun getFeatureSettings(prefix: String): Map<String, Boolean> {
+        val prefs = getApplication<Application>()
+            .getSharedPreferences("vigo_prefs", Application.MODE_PRIVATE)
+        return mapOf(
+            "HR" to prefs.getBoolean("${prefix}_HR", true),
+            "PPI" to prefs.getBoolean("${prefix}_PPI", true),
+            "ACC" to prefs.getBoolean("${prefix}_ACC", true),
+            "ECG" to prefs.getBoolean("${prefix}_ECG", true)
+        )
+    }
+
+    fun toggleShowFeature(feature: String) {
+        val current = _showFeatures.value.toMutableMap()
+        current[feature] = !(current[feature] ?: true)
+        _showFeatures.value = current
+        getApplication<Application>()
+            .getSharedPreferences("vigo_prefs", Application.MODE_PRIVATE)
+            .edit { putBoolean("show_$feature", current[feature] ?: true) }
+    }
+
+    fun toggleLogFeature(feature: String) {
+        val current = _logFeatures.value.toMutableMap()
+        current[feature] = !(current[feature] ?: true)
+        _logFeatures.value = current
+        getApplication<Application>()
+            .getSharedPreferences("vigo_prefs", Application.MODE_PRIVATE)
+            .edit { putBoolean("log_$feature", current[feature] ?: true) }
+    }
+
+    private fun getActiveFeatures(): Set<String> {
+        return (_showFeatures.value.filter { it.value }.keys + _logFeatures.value.filter { it.value }.keys)
+    }
+
     private fun getSavedLogUri(): String {
         return getApplication<Application>()
             .getSharedPreferences("vigo_prefs", Application.MODE_PRIVATE)
@@ -264,7 +303,12 @@ class HomeViewModel(
 
                 activityRepo.startActivity(activity)
 
-                val updatedActivity = activity.copy(links = allActiveLinks)
+                val activeFeatures = getActiveFeatures()
+                val updatedActivity = activity.copy(
+                    links = allActiveLinks.map { link ->
+                        link.copy(featuresToTrack = link.featuresToTrack.filter { it in activeFeatures })
+                    }
+                )
                 sensorRepo.startActivityStreaming(updatedActivity)
 
                 val sensorIds = allActiveLinks.map { it.sensorId }.toTypedArray()
@@ -352,7 +396,8 @@ class HomeViewModel(
 
     fun startPatientStream(sensorId: String, features: List<String>) {
         viewModelScope.launch {
-            features.forEach { feature ->
+            val activeFeatures = getActiveFeatures()
+            features.filter { it in activeFeatures }.forEach { feature ->
                 sensorRepo.startFeatureStream(sensorId, feature)
             }
         }
@@ -362,7 +407,13 @@ class HomeViewModel(
         viewModelScope.launch {
             val resumed = activity.copy(endTime = null, isRunning = true)
             activityRepo.updateActivity(resumed)
-            sensorRepo.startActivityStreaming(resumed)
+            val activeFeatures = getActiveFeatures()
+            val filtered = resumed.copy(
+                links = resumed.links.map { link ->
+                    link.copy(featuresToTrack = link.featuresToTrack.filter { it in activeFeatures })
+                }
+            )
+            sensorRepo.startActivityStreaming(filtered)
 
             val sensorIds = resumed.links.map { it.sensorId }.toTypedArray()
             val stageName = resumed.stageId?.let { id ->

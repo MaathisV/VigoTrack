@@ -30,6 +30,7 @@ fun ActivitySessionScreen(
     val connectedSensors by homeViewModel.connectedDevicesList.collectAsState()
     val preLinks by homeViewModel.sensorPatientLinks.collectAsState()
     val patients by homeViewModel.patients.collectAsState()
+    val showFeatures by homeViewModel.showFeatures.collectAsState()
 
     val activity = allActivities.find { it.id == activityId }
 
@@ -157,7 +158,8 @@ fun ActivitySessionScreen(
                             SensorDataCard(
                                 link = link,
                                 sensorName = sensorName,
-                                sensorData = allLiveData[link.sensorId]
+                                sensorData = allLiveData[link.sensorId],
+                                showFeatures = showFeatures
                             )
                         }
                     }
@@ -312,6 +314,7 @@ fun SensorDataCard(
     link: ActivitySession.ActivityLink,
     sensorName: String? = null,
     sensorData: Map<String, Any>?,
+    showFeatures: Map<String, Boolean> = emptyMap(),
     columns: Int = 2
 ) {
     val hrValue = (sensorData?.get("HR") as? Number)?.toFloat()
@@ -326,23 +329,23 @@ fun SensorDataCard(
     val accMagnitude = gravityRemoved * 9.81f / 1000f
 
     val features = listOfNotNull(
-        if (link.streamHR) FeatureData(
+        if (link.streamHR && showFeatures.getOrDefault("HR", true)) FeatureData(
             label = "HR", valueText = "${hrValue?.toInt() ?: "--"}", unit = "bpm",
             valueColor = MaterialTheme.colorScheme.primary,
             graphValue = hrValue, graphColor = MaterialTheme.colorScheme.primary
         ) else null,
-        if (link.streamPPI) FeatureData(
+        if (link.streamPPI && showFeatures.getOrDefault("PPI", true)) FeatureData(
             label = "PPI", valueText = "${ppiValue?.toInt() ?: "--"}", unit = "ms",
             valueColor = MaterialTheme.colorScheme.onSurface,
             graphValue = ppiValue, graphColor = MaterialTheme.colorScheme.secondary
         ) else null,
-        if (link.streamACC) FeatureData(
+        if (link.streamACC && showFeatures.getOrDefault("ACC", true)) FeatureData(
             label = "ACC", valueText = "%.1f".format(accMagnitude), unit = "m/s²",
             valueColor = MaterialTheme.colorScheme.onSurface,
             graphValue = if (accMagnitude > 0f) accMagnitude else null,
             graphColor = MaterialTheme.colorScheme.tertiary
         ) else null,
-        if (link.streamECG) FeatureData(
+        if (link.streamECG && showFeatures.getOrDefault("ECG", true)) FeatureData(
             label = "ECG", valueText = "${ecgValue?.toInt() ?: "--"}", unit = "uV",
             valueColor = MaterialTheme.colorScheme.error,
             graphValue = ecgValue, graphColor = MaterialTheme.colorScheme.error,

@@ -118,6 +118,8 @@ fun BilanScreen(
     }
 
     if (showConnectionDialog) {
+        val showFeatures by homeViewModel.showFeatures.collectAsState()
+        val logFeatures by homeViewModel.logFeatures.collectAsState()
         ConnectionDialog(
             scannedDevices = scannedDevices,
             connectedDevicesList = connectedDevicesList,
@@ -127,6 +129,8 @@ fun BilanScreen(
             sensorPatientLinks = sensorPatientLinks,
             currentLogUri = currentLogUri,
             namingTemplate = namingTemplate,
+            showFeatures = showFeatures,
+            logFeatures = logFeatures,
             onDismiss = { showConnectionDialog = false },
             onConnect = { sensor -> homeViewModel.connectToDevice(sensor) },
             onDisconnect = { id -> homeViewModel.disconnectFromDevice(id) },
@@ -141,7 +145,9 @@ fun BilanScreen(
             },
             onDeleteSensorPatientLink = { link ->
                 homeViewModel.deleteSensorPatientLink(link)
-            }
+            },
+            onToggleShowFeature = { feature -> homeViewModel.toggleShowFeature(feature) },
+            onToggleLogFeature = { feature -> homeViewModel.toggleLogFeature(feature) }
         )
     }
 }

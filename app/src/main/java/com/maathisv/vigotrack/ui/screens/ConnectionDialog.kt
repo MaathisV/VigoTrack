@@ -28,6 +28,8 @@ fun ConnectionDialog(
     sensorPatientLinks: List<SensorPatientLink>,
     currentLogUri: String,
     namingTemplate: String,
+    showFeatures: Map<String, Boolean>,
+    logFeatures: Map<String, Boolean>,
     onDismiss: () -> Unit,
     onConnect: (Sensor) -> Unit,
     onDisconnect: (String) -> Unit,
@@ -38,7 +40,9 @@ fun ConnectionDialog(
     onTemplateChange: (String) -> Unit,
     onResetTemplate: () -> Unit,
     onCreateSensorPatientLink: (Long?, String, List<String>) -> Unit,
-    onDeleteSensorPatientLink: (SensorPatientLink) -> Unit
+    onDeleteSensorPatientLink: (SensorPatientLink) -> Unit,
+    onToggleShowFeature: (String) -> Unit,
+    onToggleLogFeature: (String) -> Unit
 ) {
     var selectedTab by remember { mutableStateOf(0) }
 
@@ -94,9 +98,13 @@ fun ConnectionDialog(
                 3 -> SettingsTab(
                     currentLogUri = currentLogUri,
                     namingTemplate = namingTemplate,
+                    showFeatures = showFeatures,
+                    logFeatures = logFeatures,
                     onPickLogFolder = onPickLogFolder,
                     onTemplateChange = onTemplateChange,
-                    onResetTemplate = onResetTemplate
+                    onResetTemplate = onResetTemplate,
+                    onToggleShowFeature = onToggleShowFeature,
+                    onToggleLogFeature = onToggleLogFeature
                 )
             }
         },
@@ -514,9 +522,13 @@ private fun PatientTab(
 private fun SettingsTab(
     currentLogUri: String,
     namingTemplate: String,
+    showFeatures: Map<String, Boolean>,
+    logFeatures: Map<String, Boolean>,
     onPickLogFolder: () -> Unit,
     onTemplateChange: (String) -> Unit,
-    onResetTemplate: () -> Unit
+    onResetTemplate: () -> Unit,
+    onToggleShowFeature: (String) -> Unit,
+    onToggleLogFeature: (String) -> Unit
 ) {
     var showPlaceholders by remember { mutableStateOf(false) }
 
@@ -582,6 +594,46 @@ private fun SettingsTab(
             }
             TextButton(onClick = { showPlaceholders = true }) {
                 Text("Placeholders...")
+            }
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+        Text(
+            text = "Visibilité des données",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        val features = listOf("HR", "PPI", "ACC", "ECG")
+        val featureLabels = mapOf("HR" to "Fréquence cardiaque", "PPI" to "Intervalle PP", "ACC" to "Accéléromètre", "ECG" to "ECG")
+
+        features.forEach { feature ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = featureLabels[feature] ?: feature,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(
+                        checked = showFeatures[feature] ?: true,
+                        onCheckedChange = { onToggleShowFeature(feature) }
+                    )
+                    Text("Afficher", style = MaterialTheme.typography.labelSmall)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(
+                        checked = logFeatures[feature] ?: true,
+                        onCheckedChange = { onToggleLogFeature(feature) }
+                    )
+                    Text("Enregistrer", style = MaterialTheme.typography.labelSmall)
+                }
             }
         }
     }
