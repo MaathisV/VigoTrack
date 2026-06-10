@@ -187,7 +187,11 @@ class HomeViewModel(
 
     fun addLink(activityId: String, patientId: Long?, patientName: String, sensorId: String, features: List<String>) {
         viewModelScope.launch(Dispatchers.IO) {
-            val finalPatientId = patientId ?: patientDataSource.insertPatient(Patient(name = patientName))
+            val finalPatientId = if (patientId != null && patients.value.any { it.id == patientId }) {
+                patientId
+            } else {
+                patientDataSource.insertPatient(Patient(name = patientName))
+            }
             val link = ActivitySession.ActivityLink(
                 patientId = finalPatientId,
                 patientName = patientName,
@@ -204,7 +208,7 @@ class HomeViewModel(
         }
     }
 
-    fun toggleSession(activity: ActivitySession, checkedSensorIds: Set<String> = emptySet()) {
+    fun toggleSession(activity: ActivitySession, checkedKeys: Set<String> = emptySet()) {
         viewModelScope.launch {
             // Use getApplication() here!
             val intent = Intent(getApplication(), PolarService::class.java)
@@ -219,11 +223,29 @@ class HomeViewModel(
                 val existingLinks = activity.links.map { it.sensorId to it.patientId }.toSet()
                 val allActiveLinks = activity.links.toMutableList()
 
+                val checkedPairs = checkedKeys.mapNotNull { key ->
+                    val parts = key.split("_")
+                    if (parts.size >= 2) {
+                        val sensorId = parts.first()
+                        val patientId = parts.drop(1).joinToString("_").let { str ->
+                            if (str == "null") null else str.toLongOrNull()
+                        }
+                        sensorId to patientId
+                    } else null
+                }.toSet()
+
                 sensorPatientLinks.value
-                    .filter { it.sensorId in checkedSensorIds && (it.sensorId to it.patientId) !in existingLinks }
+                    .filter { link ->
+                        val pair = link.sensorId to link.patientId
+                        pair in checkedPairs && pair !in existingLinks
+                    }
                     .forEach { link ->
                         val patientName = patients.value.find { it.id == link.patientId }?.name ?: "Unknown"
-                        val finalPatientId = link.patientId ?: patientDataSource.insertPatient(Patient(name = patientName))
+                        val finalPatientId = if (link.patientId != null && patients.value.any { it.id == link.patientId }) {
+                            link.patientId
+                        } else {
+                            patientDataSource.insertPatient(Patient(name = patientName))
+                        }
                         val newLink = ActivitySession.ActivityLink(
                             patientId = finalPatientId,
                             patientName = patientName,

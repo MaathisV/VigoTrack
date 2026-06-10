@@ -141,7 +141,7 @@ fun ActivitySessionScreen(
                         }
                     }
 
-                    item { StartStopControls(activity, homeViewModel, checkedSensorIds.keys.map { it.substringBefore("_") }.toSet()) }
+                    item { StartStopControls(activity, homeViewModel, checkedSensorIds.keys.toSet()) }
                 }
 
                 if (activity.status != ActivityStatus.SCHEDULED) {
@@ -374,13 +374,13 @@ fun SensorDataCard(
 }
 
 @Composable
-fun StartStopControls(activity: ActivitySession, homeViewModel: HomeViewModel, checkedSensorIds: Set<String> = emptySet()) {
+fun StartStopControls(activity: ActivitySession, homeViewModel: HomeViewModel, checkedKeys: Set<String> = emptySet()) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.Center
     ) {
         Button(
-            onClick = { homeViewModel.toggleSession(activity, checkedSensorIds) },
+            onClick = { homeViewModel.toggleSession(activity, checkedKeys) },
             colors = if (activity.isRunning)
                 ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
             else ButtonDefaults.buttonColors(),
