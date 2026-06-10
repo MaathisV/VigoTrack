@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.key
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -194,8 +195,14 @@ private fun CreateStageDialog(
                         value = dateFormat.format(Date(startDate)),
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Start Date") },
-                        modifier = Modifier.fillMaxWidth()
+                        enabled = false,
+                        label = { Text("Date de début") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                            disabledBorderColor = MaterialTheme.colorScheme.outline,
+                            disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     )
                 }
 
@@ -204,8 +211,14 @@ private fun CreateStageDialog(
                         value = dateFormat.format(Date(endDate)),
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("End Date") },
-                        modifier = Modifier.fillMaxWidth()
+                        enabled = false,
+                        label = { Text("Date de fin") },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                            disabledBorderColor = MaterialTheme.colorScheme.outline,
+                            disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     )
                 }
             }
@@ -221,35 +234,44 @@ private fun CreateStageDialog(
         }
     )
 
-    if (showStartPicker) {
-        val state = rememberDatePickerState(initialSelectedDateMillis = startDate)
-        DatePickerDialog(
-            onDismissRequest = { showStartPicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    state.selectedDateMillis?.let { startDate = it }
-                    showStartPicker = false
-                }) { Text("OK") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showStartPicker = false }) { Text("Cancel") }
-            }
-        ) { DatePicker(state = state) }
+    key(showStartPicker) {
+        if (showStartPicker) {
+            val state = rememberDatePickerState(initialSelectedDateMillis = startDate)
+            DatePickerDialog(
+                onDismissRequest = { showStartPicker = false },
+                confirmButton = {
+                    TextButton(onClick = {
+                        state.selectedDateMillis?.let {
+                            startDate = it
+                            if (endDate <= it) {
+                                endDate = it + 7 * 24 * 60 * 60 * 1000L
+                            }
+                        }
+                        showStartPicker = false
+                    }) { Text("OK") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showStartPicker = false }) { Text("Cancel") }
+                }
+            ) { DatePicker(state = state) }
+        }
     }
 
-    if (showEndPicker) {
-        val state = rememberDatePickerState(initialSelectedDateMillis = endDate)
-        DatePickerDialog(
-            onDismissRequest = { showEndPicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    state.selectedDateMillis?.let { endDate = it }
-                    showEndPicker = false
-                }) { Text("OK") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showEndPicker = false }) { Text("Cancel") }
-            }
-        ) { DatePicker(state = state) }
+    key(showEndPicker) {
+        if (showEndPicker) {
+            val state = rememberDatePickerState(initialSelectedDateMillis = endDate)
+            DatePickerDialog(
+                onDismissRequest = { showEndPicker = false },
+                confirmButton = {
+                    TextButton(onClick = {
+                        state.selectedDateMillis?.let { endDate = it }
+                        showEndPicker = false
+                    }) { Text("OK") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showEndPicker = false }) { Text("Cancel") }
+                }
+            ) { DatePicker(state = state) }
+        }
     }
 }
