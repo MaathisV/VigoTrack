@@ -177,24 +177,34 @@ fun ActivitySessionScreen(
                     val activeLinks = activity.links.filter { checkedSensorIds["${it.sensorId}_${it.patientId}"] == true }
                     if (activeLinks.isEmpty()) {
                         item { Text("Aucun capteur actif.", style = MaterialTheme.typography.bodySmall) }
+                    } else if (compactView) {
+                        item {
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                activeLinks.forEach { link ->
+                                    val sensorName = connectedSensors.find { it.deviceId == link.sensorId }?.effectiveName
+                                    CompactSensorDataCard(
+                                        link = link,
+                                        sensorName = sensorName,
+                                        sensorData = allLiveData[link.sensorId],
+                                        showFeatures = showFeatures,
+                                        modifier = Modifier.width(250.dp)
+                                    )
+                                }
+                            }
+                        }
                     } else {
                         items(activeLinks) { link ->
                             val sensorName = connectedSensors.find { it.deviceId == link.sensorId }?.effectiveName
-                            if (compactView) {
-                                CompactSensorDataCard(
-                                    link = link,
-                                    sensorName = sensorName,
-                                    sensorData = allLiveData[link.sensorId],
-                                    showFeatures = showFeatures
-                                )
-                            } else {
-                                SensorDataCard(
-                                    link = link,
-                                    sensorName = sensorName,
-                                    sensorData = allLiveData[link.sensorId],
-                                    showFeatures = showFeatures
-                                )
-                            }
+                            SensorDataCard(
+                                link = link,
+                                sensorName = sensorName,
+                                sensorData = allLiveData[link.sensorId],
+                                showFeatures = showFeatures
+                            )
                         }
                     }
                 }
