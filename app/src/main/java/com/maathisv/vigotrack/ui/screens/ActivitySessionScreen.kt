@@ -47,10 +47,12 @@ fun ActivitySessionScreen(
         activity?.links?.forEach { link ->
             checkedSensorIds["${link.sensorId}_${link.patientId}"] = true
         }
-        preLinks.forEach { preLink ->
-            val key = "${preLink.sensorId}_${preLink.patientId}"
-            if (!checkedSensorIds.containsKey(key)) {
-                checkedSensorIds[key] = true
+        if (activity?.links.isNullOrEmpty()) {
+            preLinks.forEach { preLink ->
+                val key = "${preLink.sensorId}_${preLink.patientId}"
+                if (!checkedSensorIds.containsKey(key)) {
+                    checkedSensorIds[key] = true
+                }
             }
         }
     }
