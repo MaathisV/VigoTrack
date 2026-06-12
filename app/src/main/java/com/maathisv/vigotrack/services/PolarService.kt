@@ -33,6 +33,8 @@ const val DEFAULT_TEMPLATE = "{stage}/{patient}/{category}/{activity}_{datetime}
 
 class PolarService : LifecycleService() {
     private val loggers = mutableMapOf<String, DataLogger>()
+    private var previousHr = 0
+    private val POLAR_TO_UNIX_EPOCH_NS = 946684800_000_000_000L
 
     private val repository: SensorRepository by lazy {
         (application as VigoTrackApplication).sensorRepository
@@ -169,11 +171,12 @@ class PolarService : LifecycleService() {
     }
 
     private fun onHrReceived(logger: DataLogger, sample: PolarHrData.PolarHrSample) {
-        val timestamp = System.nanoTime()
+        val timestamp = System.currentTimeMillis() * 1_000_000L
+        val hrValue = if (sample.hr == 0) previousHr else sample.hr.also { previousHr = it }
         logger.logData(
             tag = "HR",
             header = "TIMESTAMP HR PPQ_QUALITY CORRECTED_HR RR_AVAILABLE CONTACT_SUPPORTED CONTACT_STATUS RR(ms)",
-            dataLine = "$timestamp ${sample.hr} ${sample.ppgQuality} ${sample.correctedHr} ${sample.rrAvailable} ${sample.contactStatusSupported} ${sample.contactStatus} ${if (sample.rrsMs.isEmpty()) "NA" else sample.rrsMs.joinToString(" ")}"
+            dataLine = "$timestamp $hrValue ${sample.ppgQuality} ${sample.correctedHr} ${sample.rrAvailable} ${sample.contactStatusSupported} ${sample.contactStatus} ${if (sample.rrsMs.isEmpty()) "NA" else sample.rrsMs.joinToString(" ")}"
         )
     }
 
@@ -181,7 +184,7 @@ class PolarService : LifecycleService() {
         logger.logData(
             tag = "ACC",
             header = "TIMESTAMP X(mg) Y(mg) Z(mg)",
-            dataLine = "$timestamp $x $y $z"
+            dataLine = "${timestamp + POLAR_TO_UNIX_EPOCH_NS} $x $y $z"
         )
     }
 
@@ -190,7 +193,7 @@ class PolarService : LifecycleService() {
         logger.logData(
             tag = "PPI",
             header = "TIMESTAMP PPI(ms) ERROR_ESTIMATE BLOCKER_BIT SKIN_CONTACT_STATUS SKIN_CONTACT_SUPPORT HR",
-            dataLine = "$timestamp $ppi $errorEstimate $blockerBit $skinContactStatus $skinContactSupported $hr"
+            dataLine = "${timestamp + POLAR_TO_UNIX_EPOCH_NS} $ppi $errorEstimate $blockerBit $skinContactStatus $skinContactSupported $hr"
         )
     }
 
@@ -200,14 +203,14 @@ class PolarService : LifecycleService() {
                 logger.logData(
                     tag = "ECG",
                     header = "TIMESTAMP VOLTAGE(uV)",
-                    dataLine = "${sample.timeStamp} ${sample.voltage}"
+                    dataLine = "${sample.timeStamp + POLAR_TO_UNIX_EPOCH_NS} ${sample.voltage}"
                 )
             }
             is com.polar.sdk.api.model.FecgSample -> {
                 logger.logData(
                     tag = "ECG",
                     header = "TIMESTAMP VOLTAGE(uV) BIOZ STATUS",
-                    dataLine = "${sample.timeStamp} ${sample.ecg} ${sample.bioz} ${sample.status}"
+                    dataLine = "${sample.timeStamp + POLAR_TO_UNIX_EPOCH_NS} ${sample.ecg} ${sample.bioz} ${sample.status}"
                 )
             }
         }

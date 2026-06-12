@@ -16,6 +16,7 @@ import com.maathisv.vigotrack.models.ConnectionState
 import com.maathisv.vigotrack.models.Sensor
 import com.maathisv.vigotrack.models.StreamIdentifier
 import com.polar.androidcommunications.api.ble.exceptions.BleServiceNotFound
+import java.time.LocalDateTime
 import com.polar.androidcommunications.api.ble.model.DisInfo
 import com.polar.sdk.api.PolarBleApi
 import com.polar.sdk.api.PolarBleApiCallback
@@ -59,7 +60,8 @@ class SensorRepository(
                 PolarBleApi.PolarBleSdkFeature.FEATURE_HR,
                 PolarBleApi.PolarBleSdkFeature.FEATURE_DEVICE_INFO,
                 PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_ONLINE_STREAMING,
-                PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_OFFLINE_RECORDING)
+                PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_OFFLINE_RECORDING,
+                PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_DEVICE_TIME_SETUP)
         )
     }
 
@@ -211,6 +213,17 @@ class SensorRepository(
                 _readyFeatures.update { currentMap ->
                     val features = currentMap[identifier] ?: emptySet()
                     currentMap + (identifier to (features + feature))
+                }
+
+                if (feature == PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_DEVICE_TIME_SETUP) {
+                    repositoryScope.launch {
+                        try {
+                            api.setLocalTime(identifier, LocalDateTime.now())
+                            Log.d(TAG, "Time synced for $identifier")
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Time sync failed for $identifier", e)
+                        }
+                    }
                 }
             }
 
