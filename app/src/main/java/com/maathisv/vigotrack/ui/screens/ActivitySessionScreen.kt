@@ -42,6 +42,7 @@ fun ActivitySessionScreen(
     var currentType by remember(activity) { mutableStateOf(activity?.activityType) }
 
     val checkedSensorIds = remember { mutableStateMapOf<String, Boolean>() }
+    var compactView by remember { mutableStateOf(false) }
 
     LaunchedEffect(activityId) {
         activity?.links?.forEach { link ->
@@ -155,11 +156,46 @@ fun ActivitySessionScreen(
                     item { StartStopControls(activity, homeViewModel, checkedSensorIds.keys.toSet()) }
                 }
 
-                if (activity.status != ActivityStatus.SCHEDULED) {
+                    if (activity.status != ActivityStatus.SCHEDULED) {
+                    item {
+                        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                            SegmentedButton(
+                                selected = !compactView,
+                                onClick = { compactView = false },
+                                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                                label = { Text("Graph") }
+                            )
+                            SegmentedButton(
+                                selected = compactView,
+                                onClick = { compactView = true },
+                                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                                label = { Text("Compact") }
+                            )
+                        }
+                    }
                     item { Text("Données en direct", style = MaterialTheme.typography.titleMedium) }
                     val activeLinks = activity.links.filter { checkedSensorIds["${it.sensorId}_${it.patientId}"] == true }
                     if (activeLinks.isEmpty()) {
                         item { Text("Aucun capteur actif.", style = MaterialTheme.typography.bodySmall) }
+                    } else if (compactView) {
+                        item {
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                activeLinks.forEach { link ->
+                                    val sensorName = connectedSensors.find { it.deviceId == link.sensorId }?.effectiveName
+                                    CompactSensorDataCard(
+                                        link = link,
+                                        sensorName = sensorName,
+                                        sensorData = allLiveData[link.sensorId],
+                                        showFeatures = showFeatures,
+                                        modifier = Modifier.width(250.dp)
+                                    )
+                                }
+                            }
+                        }
                     } else {
                         items(activeLinks) { link ->
                             val sensorName = connectedSensors.find { it.deviceId == link.sensorId }?.effectiveName
@@ -500,6 +536,68 @@ fun SessionStatusCard(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CompactSensorDataCard(
+    link: ActivitySession.ActivityLink,
+    sensorName: String? = null,
+    sensorData: Map<String, Any>?,
+    showFeatures: Map<String, Boolean> = emptyMap(),
+    modifier: Modifier = Modifier
+) {
+    val hrValue = (sensorData?.get("HR") as? Number)?.toInt()
+    val ppiValue = (sensorData?.get("PPI") as? Number)?.toInt()
+    val ecgValue = (sensorData?.get("ECG") as? Number)?.toInt()
+
+    val accX = (sensorData?.get("ACC_X") as? Number)?.toFloat() ?: 0f
+    val accY = (sensorData?.get("ACC_Y") as? Number)?.toFloat() ?: 0f
+    val accZ = (sensorData?.get("ACC_Z") as? Number)?.toFloat() ?: 0f
+    val rawMag = sqrt(accX * accX + accY * accY + accZ * accZ)
+    val gravityRemoved = if (rawMag >= 1000f) rawMag - 1000f else 1000f - rawMag
+    val accMagnitude = gravityRemoved * 9.81f / 1000f
+
+    Card(
+        modifier = modifier.fillMaxWidth().padding(vertical = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp).height(IntrinsicSize.Min),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "${link.patientName} (${sensorName ?: link.sensorId})",
+                    style = MaterialTheme.typography.labelMedium
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (link.streamHR && showFeatures.getOrDefault("HR", true)) {
+                        Text("HR: ${hrValue ?: "--"}", style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (link.streamPPI && showFeatures.getOrDefault("PPI", true)) {
+                        Text("PPI: ${ppiValue ?: "--"}", style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (link.streamACC && showFeatures.getOrDefault("ACC", true)) {
+                        Text("ACC: ${"%.1f".format(accMagnitude)}", style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (link.streamECG && showFeatures.getOrDefault("ECG", true)) {
+                        Text("ECG: ${ecgValue ?: "--"}", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+            VerticalDivider(
+                modifier = Modifier.height(IntrinsicSize.Min).padding(horizontal = 8.dp)
+            )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.width(50.dp)
+            ) {
+                Text("Intensité", style = MaterialTheme.typography.labelSmall)
+                Text("--", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
             }
         }
     }
