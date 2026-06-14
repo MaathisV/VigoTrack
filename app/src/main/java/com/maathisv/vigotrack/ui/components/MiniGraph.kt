@@ -2,7 +2,6 @@ package com.maathisv.vigotrack.ui.components
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
@@ -44,7 +43,7 @@ fun MiniGraph(
         val max = buffer.max()
         val range = (max - min).coerceAtLeast(1f)
         val stepX = size.width / (maxPoints - 1).coerceAtLeast(1)
-        val startOffset = ((maxPoints - count).coerceAtLeast(0) * stepX).toFloat()
+        val startOffset = ((maxPoints - count).coerceAtLeast(0) * stepX)
         val path = Path()
         buffer.forEachIndexed { i, v ->
             val x = startOffset + i * stepX

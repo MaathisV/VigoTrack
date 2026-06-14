@@ -16,5 +16,6 @@ data class SensorEntity(
     val address: String,
     val name: String,
     val displayName: String? = null,
-    val lastSeen: Long = System.currentTimeMillis()
+    val lastSeen: Long = System.currentTimeMillis(),
+    val vendor: String = "polar"
 )

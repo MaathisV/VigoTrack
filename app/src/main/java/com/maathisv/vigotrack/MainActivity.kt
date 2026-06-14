@@ -2,22 +2,21 @@ package com.maathisv.vigotrack
 
 import android.Manifest
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
-import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.edit
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import com.maathisv.vigotrack.services.PolarService
 import androidx.navigation.compose.rememberNavController
+import com.maathisv.vigotrack.services.SensorService
 import com.maathisv.vigotrack.ui.navigation.VigoTrackNavGraph
-import com.maathisv.vigotrack.ui.screens.HomeViewModel
 import com.maathisv.vigotrack.ui.theme.VigoTrackTheme
-import androidx.core.content.edit
+import com.maathisv.vigotrack.ui.viewmodel.HomeViewModel
 
 class MainActivity : ComponentActivity() {
 
@@ -116,7 +115,7 @@ class MainActivity : ComponentActivity() {
     // complexity of Service binding or moving the PolarBleApi instance.
     // Service binding can be added later if needed
     private fun startForegroundShield() {
-        val serviceIntent = Intent(this, PolarService::class.java)
+        val serviceIntent = Intent(this, SensorService::class.java)
         startForegroundService(serviceIntent)
     }
 }

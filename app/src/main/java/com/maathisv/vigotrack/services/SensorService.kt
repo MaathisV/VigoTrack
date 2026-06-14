@@ -4,18 +4,16 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Intent
-import android.net.Uri
 import androidx.core.app.NotificationCompat
+import androidx.core.net.toUri
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.maathisv.vigotrack.R
 import com.maathisv.vigotrack.VigoTrackApplication
 import com.maathisv.vigotrack.repository.SensorRepository
+import com.maathisv.vigotrack.sensor.api.SensorDataPoint
 import com.maathisv.vigotrack.util.DataLogger
-import com.polar.sdk.api.model.PolarEcgData
-import com.polar.sdk.api.model.PolarHrData
 import kotlinx.coroutines.launch
-import androidx.core.net.toUri
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -26,15 +24,14 @@ const val EXTRA_SENSOR_IDS = "extra_sensor_ids"
 const val EXTRA_ACTIVITY_NAME = "extra_activity_name"
 const val EXTRA_ACTIVITY_CATEGORY = "extra_activity_category"
 const val EXTRA_PATIENT_NAME = "extra_patient_name"
+const val EXTRA_PATIENT_NAMES = "extra_patient_names"
 const val EXTRA_STAGE_NAME = "extra_stage_name"
 const val EXTRA_SESSION_DATE = "extra_session_date"
 
 const val DEFAULT_TEMPLATE = "{stage}/{patient}/{category}/{activity}_{datetime}/{sensor}_{tag}"
 
-class PolarService : LifecycleService() {
+class SensorService : LifecycleService() {
     private val loggers = mutableMapOf<String, DataLogger>()
-    private var previousHr = 0
-    private val POLAR_TO_UNIX_EPOCH_NS = 946684800_000_000_000L
 
     private val repository: SensorRepository by lazy {
         (application as VigoTrackApplication).sensorRepository
@@ -49,9 +46,9 @@ class PolarService : LifecycleService() {
         when (intent.action) {
             ACTION_START_STREAMS -> {
                 val sensorIds = intent.getStringArrayExtra(EXTRA_SENSOR_IDS) ?: return START_STICKY
+                val patientNames = intent.getStringArrayExtra(EXTRA_PATIENT_NAMES)
                 val activityName = intent.getStringExtra(EXTRA_ACTIVITY_NAME) ?: ""
                 val activityCategory = intent.getStringExtra(EXTRA_ACTIVITY_CATEGORY) ?: ""
-                val patientName = intent.getStringExtra(EXTRA_PATIENT_NAME) ?: ""
                 val stageName = intent.getStringExtra(EXTRA_STAGE_NAME) ?: "NoStage"
                 val sessionDate = intent.getLongExtra(EXTRA_SESSION_DATE, System.currentTimeMillis())
 
@@ -70,7 +67,8 @@ class PolarService : LifecycleService() {
 
                 if (uriString != null) {
                     startForeground(NOTIFICATION_ID, createNotification())
-                    sensorIds.forEach { sensorId ->
+                    sensorIds.forEachIndexed { i, sensorId ->
+                        val patientName = patientNames?.getOrElse(i) { "" } ?: ""
                         val staticValues = mapOf(
                             "stage" to stageName,
                             "patient" to patientName,
@@ -99,40 +97,15 @@ class PolarService : LifecycleService() {
 
     private fun observeSensorData(logFeatures: Set<String> = setOf("HR", "PPI", "ACC", "ECG")) {
         lifecycleScope.launch {
-            repository.hrLogFlow.collect { (deviceId, data) ->
+            repository.sensorDataFlow.collect { (deviceId, dataPoint) ->
                 val logger = loggers[deviceId] ?: return@collect
-                if ("HR" in logFeatures) {
-                    data.samples.forEach { s -> onHrReceived(logger, s) }
-                }
-            }
-        }
-        lifecycleScope.launch {
-            repository.ppiLogFlow.collect { (deviceId, data) ->
-                val logger = loggers[deviceId] ?: return@collect
-                if ("PPI" in logFeatures) {
-                    data.samples.forEach { s ->
-                        onPpiReceived(logger, s.timeStamp.toLong(), s.ppi, s.errorEstimate, s.hr,
-                            s.blockerBit, s.skinContactStatus, s.skinContactSupported)
-                    }
-                }
-            }
-        }
-        lifecycleScope.launch {
-            repository.accLogFlow.collect { (deviceId, data) ->
-                val logger = loggers[deviceId] ?: return@collect
-                if ("ACC" in logFeatures) {
-                    data.samples.forEach { s ->
-                        onAccReceived(logger, s.timeStamp, s.x, s.y, s.z)
-                    }
-                }
-            }
-        }
-        lifecycleScope.launch {
-            repository.ecgLogFlow.collect { (deviceId, data) ->
-                val logger = loggers[deviceId] ?: return@collect
-                if ("ECG" in logFeatures) {
-                    data.samples.forEach { s ->
-                        onEcgReceived(logger, s)
+                if (dataPoint.dataType.name in logFeatures) {
+                    when (dataPoint) {
+                        is SensorDataPoint.HeartRate -> logHr(logger, dataPoint)
+                        is SensorDataPoint.Ppi -> logPpi(logger, dataPoint)
+                        is SensorDataPoint.Accelerometer -> logAcc(logger, dataPoint)
+                        is SensorDataPoint.Electrocardiogram -> logEcg(logger, dataPoint)
+                        else -> {} // Xsens types not yet logged
                     }
                 }
             }
@@ -140,11 +113,11 @@ class PolarService : LifecycleService() {
     }
 
     private fun createNotification(): Notification {
-        val channelId = "polar_service_channel"
+        val channelId = "sensor_service_channel"
 
         val channel = NotificationChannel(
             channelId,
-            "Suivi de la fréquence cardiaque",
+            "Suivi des capteurs",
             NotificationManager.IMPORTANCE_LOW
         )
         val manager = getSystemService(NotificationManager::class.java)
@@ -152,9 +125,9 @@ class PolarService : LifecycleService() {
 
         return NotificationCompat.Builder(this, channelId)
             .setContentTitle("VigoTrack Actif")
-            .setContentText("Surveillance des capteurs Polar en arrière-plan…")
-            .setSmallIcon(R.drawable.ic_launcher_foreground) // Use a valid icon from your res/drawable
-            .setOngoing(true) // Keeps the notification from being swiped away
+            .setContentText("Surveillance des capteurs en arrière-plan…")
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }
@@ -170,51 +143,35 @@ class PolarService : LifecycleService() {
         stopSelf()
     }
 
-    private fun onHrReceived(logger: DataLogger, sample: PolarHrData.PolarHrSample) {
-        val timestamp = System.currentTimeMillis() * 1_000_000L
-        val hrValue = if (sample.hr == 0) previousHr else sample.hr.also { previousHr = it }
+    private fun logHr(logger: DataLogger, sample: SensorDataPoint.HeartRate) {
         logger.logData(
             tag = "HR",
             header = "TIMESTAMP HR PPQ_QUALITY CORRECTED_HR RR_AVAILABLE CONTACT_SUPPORTED CONTACT_STATUS RR(ms)",
-            dataLine = "$timestamp $hrValue ${sample.ppgQuality} ${sample.correctedHr} ${sample.rrAvailable} ${sample.contactStatusSupported} ${sample.contactStatus} ${if (sample.rrsMs.isEmpty()) "NA" else sample.rrsMs.joinToString(" ")}"
+            dataLine = "${sample.timestamp} ${sample.hr} ${sample.ppgQuality} ${sample.correctedHr} ${sample.rrAvailable} ${sample.contactStatusSupported} ${sample.contactStatus} ${if (sample.rrsMs.isEmpty()) "NA" else sample.rrsMs.joinToString(" ")}"
         )
     }
 
-    private fun onAccReceived(logger: DataLogger, timestamp: Long, x: Int, y: Int, z: Int) {
+    private fun logAcc(logger: DataLogger, sample: SensorDataPoint.Accelerometer) {
         logger.logData(
             tag = "ACC",
             header = "TIMESTAMP X(mg) Y(mg) Z(mg)",
-            dataLine = "${timestamp + POLAR_TO_UNIX_EPOCH_NS} $x $y $z"
+            dataLine = "${sample.timestamp} ${sample.x.toInt()} ${sample.y.toInt()} ${sample.z.toInt()}"
         )
     }
 
-    private fun onPpiReceived(logger: DataLogger, timestamp: Long, ppi: Int, errorEstimate: Int, hr: Int,
-                              blockerBit: Boolean, skinContactStatus: Boolean, skinContactSupported: Boolean) {
+    private fun logPpi(logger: DataLogger, sample: SensorDataPoint.Ppi) {
         logger.logData(
             tag = "PPI",
             header = "TIMESTAMP PPI(ms) ERROR_ESTIMATE BLOCKER_BIT SKIN_CONTACT_STATUS SKIN_CONTACT_SUPPORT HR",
-            dataLine = "${timestamp + POLAR_TO_UNIX_EPOCH_NS} $ppi $errorEstimate $blockerBit $skinContactStatus $skinContactSupported $hr"
+            dataLine = "${sample.timestamp} ${sample.ppiMs} ${sample.errorEstimate} ${sample.blockerBit} ${sample.skinContactStatus} ${sample.skinContactSupported} ${sample.hr}"
         )
     }
 
-    private fun onEcgReceived(logger: DataLogger, sample: Any) {
-        when (sample) {
-            is com.polar.sdk.api.model.EcgSample -> {
-                logger.logData(
-                    tag = "ECG",
-                    header = "TIMESTAMP VOLTAGE(uV)",
-                    dataLine = "${sample.timeStamp + POLAR_TO_UNIX_EPOCH_NS} ${sample.voltage}"
-                )
-            }
-            is com.polar.sdk.api.model.FecgSample -> {
-                logger.logData(
-                    tag = "ECG",
-                    header = "TIMESTAMP VOLTAGE(uV) BIOZ STATUS",
-                    dataLine = "${sample.timeStamp + POLAR_TO_UNIX_EPOCH_NS} ${sample.ecg} ${sample.bioz} ${sample.status}"
-                )
-            }
-        }
+    private fun logEcg(logger: DataLogger, sample: SensorDataPoint.Electrocardiogram) {
+        logger.logData(
+            tag = "ECG",
+            header = "TIMESTAMP VOLTAGE(uV)",
+            dataLine = "${sample.timestamp} ${sample.voltage}"
+        )
     }
-
-
 }

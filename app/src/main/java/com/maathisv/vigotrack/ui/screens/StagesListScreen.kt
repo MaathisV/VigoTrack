@@ -5,20 +5,40 @@ import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.runtime.key
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.maathisv.vigotrack.models.ConnectionState
 import com.maathisv.vigotrack.models.Stage
 import com.maathisv.vigotrack.ui.components.AppTopBar
+import com.maathisv.vigotrack.ui.components.ConfigDialog
+import com.maathisv.vigotrack.ui.components.CreateStageDialog
+import com.maathisv.vigotrack.ui.viewmodel.HomeViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -31,7 +51,7 @@ fun StagesListScreen(
 ) {
     val stages by homeViewModel.stages.collectAsState()
     var showCreateDialog by remember { mutableStateOf(false) }
-    var showConnectionDialog by remember { mutableStateOf(false) }
+    var showConfigDialog by remember { mutableStateOf(false) }
 
     val connectionState by homeViewModel.connectionState.collectAsState()
     val deviceConnectionStates by homeViewModel.deviceConnectionStates.collectAsState()
@@ -77,7 +97,7 @@ fun StagesListScreen(
         topBar = {
             AppTopBar(
                 title = "Stages",
-                onSettingsClick = { showConnectionDialog = true }
+                onSettingsClick = { showConfigDialog = true }
             )
         },
         floatingActionButton = {
@@ -113,10 +133,10 @@ fun StagesListScreen(
         )
     }
 
-    if (showConnectionDialog) {
+    if (showConfigDialog) {
         val showFeatures by homeViewModel.showFeatures.collectAsState()
         val logFeatures by homeViewModel.logFeatures.collectAsState()
-        ConnectionDialog(
+        ConfigDialog(
             scannedDevices = scannedDevices,
             connectedDevicesList = connectedDevicesList,
             deviceConnectionStates = deviceConnectionStates,
@@ -127,7 +147,7 @@ fun StagesListScreen(
             namingTemplate = namingTemplate,
             showFeatures = showFeatures,
             logFeatures = logFeatures,
-            onDismiss = { showConnectionDialog = false },
+            onDismiss = { showConfigDialog = false },
             onConnect = { sensor -> homeViewModel.connectToDevice(sensor) },
             onDisconnect = { id -> homeViewModel.disconnectFromDevice(id) },
             onRenameSensor = { deviceId, name -> homeViewModel.renameSensor(deviceId, name) },
@@ -166,118 +186,6 @@ private fun StageCard(stage: Stage, onClick: () -> Unit) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun CreateStageDialog(
-    onDismiss: () -> Unit,
-    onConfirm: (String, Long, Long) -> Unit
-) {
-    var name by remember { mutableStateOf("") }
-    var startDate by remember { mutableStateOf(System.currentTimeMillis()) }
-    var endDate by remember { mutableStateOf(System.currentTimeMillis() + 7 * 24 * 60 * 60 * 1000L) }
-    var showStartPicker by remember { mutableStateOf(false) }
-    var showEndPicker by remember { mutableStateOf(false) }
-    val dateFormat = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Nouveau Stage") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Nom du Stage") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Box(modifier = Modifier.fillMaxWidth().clickable { showStartPicker = true }) {
-                    OutlinedTextField(
-                        value = dateFormat.format(Date(startDate)),
-                        onValueChange = {},
-                        readOnly = true,
-                        enabled = false,
-                        label = { Text("Date de début") },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                            disabledBorderColor = MaterialTheme.colorScheme.outline,
-                            disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    )
-                }
-
-                Box(modifier = Modifier.fillMaxWidth().clickable { showEndPicker = true }) {
-                    OutlinedTextField(
-                        value = dateFormat.format(Date(endDate)),
-                        onValueChange = {},
-                        readOnly = true,
-                        enabled = false,
-                        label = { Text("Date de fin") },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                            disabledBorderColor = MaterialTheme.colorScheme.outline,
-                            disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onConfirm(name, startDate, endDate) },
-                enabled = name.isNotBlank()
-            ) { Text("Créer") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Annuler") }
-        }
-    )
-
-    key(showStartPicker) {
-        if (showStartPicker) {
-            val state = rememberDatePickerState(initialSelectedDateMillis = startDate)
-            DatePickerDialog(
-                onDismissRequest = { showStartPicker = false },
-                confirmButton = {
-                    TextButton(onClick = {
-                        state.selectedDateMillis?.let {
-                            startDate = it
-                            if (endDate <= it) {
-                                endDate = it + 7 * 24 * 60 * 60 * 1000L
-                            }
-                        }
-                        showStartPicker = false
-                    }) { Text("OK") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showStartPicker = false }) { Text("Annuler") }
-                }
-            ) { DatePicker(state = state) }
-        }
-    }
-
-    key(showEndPicker) {
-        if (showEndPicker) {
-            val state = rememberDatePickerState(initialSelectedDateMillis = endDate)
-            DatePickerDialog(
-                onDismissRequest = { showEndPicker = false },
-                confirmButton = {
-                    TextButton(onClick = {
-                        state.selectedDateMillis?.let { endDate = it }
-                        showEndPicker = false
-                    }) { Text("OK") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showEndPicker = false }) { Text("Annuler") }
-                }
-            ) { DatePicker(state = state) }
         }
     }
 }

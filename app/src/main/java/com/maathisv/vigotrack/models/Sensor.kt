@@ -5,7 +5,8 @@ data class Sensor(
     val deviceId: String, // unique ID
     val name: String = "Polar Pacer Pro",
     val displayName: String? = null,
-    val imageUrl: String = ""
+    val imageUrl: String = "",
+    val vendor: String = "polar"
 ) {
     val effectiveName: String get() = displayName ?: name
 }

@@ -29,11 +29,13 @@ data class ActivitySession(
         val sensorId: String,
         val featuresToTrack: List<String> = emptyList()
     ) {
-        // UI Helpers: The screen is looking for these booleans
         val streamHR: Boolean get() = featuresToTrack.contains("HR")
         val streamPPI: Boolean get() = featuresToTrack.contains("PPI")
         val streamACC: Boolean get() = featuresToTrack.contains("ACC")
         val streamECG: Boolean get() = featuresToTrack.contains("ECG")
+        val streamEULER: Boolean get() = featuresToTrack.contains("EULER")
+        val streamQUATERNION: Boolean get() = featuresToTrack.contains("QUATERNION")
+        val streamFREE_ACCEL: Boolean get() = featuresToTrack.contains("FREE_ACCELERATION")
     }
 }
 

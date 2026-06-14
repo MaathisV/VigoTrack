@@ -25,7 +25,8 @@ class RoomSensorDataSource(private val sensorDao: SensorDao) : SensorDataSource 
                     deviceId = entity.deviceId,
                     address = entity.address,
                     name = entity.name,
-                    displayName = entity.displayName
+                    displayName = entity.displayName,
+                    vendor = entity.vendor
                 )
             }
         }
@@ -37,7 +38,8 @@ class RoomSensorDataSource(private val sensorDao: SensorDao) : SensorDataSource 
                 deviceId = sensor.deviceId,
                 address = sensor.address,
                 name = sensor.name,
-                displayName = sensor.displayName
+                displayName = sensor.displayName,
+                vendor = sensor.vendor
             )
         )
     }

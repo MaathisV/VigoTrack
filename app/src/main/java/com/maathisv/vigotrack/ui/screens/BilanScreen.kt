@@ -5,13 +5,30 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -20,9 +37,10 @@ import com.maathisv.vigotrack.models.ActivityCategory
 import com.maathisv.vigotrack.models.ActivitySession
 import com.maathisv.vigotrack.models.ActivityStatus
 import com.maathisv.vigotrack.models.ActivityType
-import com.maathisv.vigotrack.models.ConnectionState
 import com.maathisv.vigotrack.models.Patient
 import com.maathisv.vigotrack.ui.components.AppTopBar
+import com.maathisv.vigotrack.ui.components.ConfigDialog
+import com.maathisv.vigotrack.ui.viewmodel.HomeViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -41,7 +59,7 @@ fun BilanScreen(
     val bilanTypes = ActivityType.entries.filter { it.category == ActivityCategory.BILAN }
     val completedMap = remember(activities) { buildCompletedMap(activities) }
 
-    var showConnectionDialog by remember { mutableStateOf(false) }
+    var showConfigDialog by remember { mutableStateOf(false) }
 
     val connectionState by homeViewModel.connectionState.collectAsState()
     val deviceConnectionStates by homeViewModel.deviceConnectionStates.collectAsState()
@@ -69,7 +87,7 @@ fun BilanScreen(
             AppTopBar(
                 title = "Bilans — ${stage?.name ?: ""}",
                 onBack = onBack,
-                onSettingsClick = { showConnectionDialog = true }
+                onSettingsClick = { showConfigDialog = true }
             )
         }
     ) { padding ->
@@ -118,10 +136,10 @@ fun BilanScreen(
         }
     }
 
-    if (showConnectionDialog) {
+    if (showConfigDialog) {
         val showFeatures by homeViewModel.showFeatures.collectAsState()
         val logFeatures by homeViewModel.logFeatures.collectAsState()
-        ConnectionDialog(
+        ConfigDialog(
             scannedDevices = scannedDevices,
             connectedDevicesList = connectedDevicesList,
             deviceConnectionStates = deviceConnectionStates,
@@ -132,7 +150,7 @@ fun BilanScreen(
             namingTemplate = namingTemplate,
             showFeatures = showFeatures,
             logFeatures = logFeatures,
-            onDismiss = { showConnectionDialog = false },
+            onDismiss = { showConfigDialog = false },
             onConnect = { sensor -> homeViewModel.connectToDevice(sensor) },
             onDisconnect = { id -> homeViewModel.disconnectFromDevice(id) },
             onRenameSensor = { deviceId, name -> homeViewModel.renameSensor(deviceId, name) },

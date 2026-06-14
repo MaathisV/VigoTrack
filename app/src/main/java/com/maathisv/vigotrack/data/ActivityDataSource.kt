@@ -1,7 +1,8 @@
 package com.maathisv.vigotrack.data
 
 import com.maathisv.vigotrack.data.dao.ActivityDao
-import com.maathisv.vigotrack.data.mappers.*
+import com.maathisv.vigotrack.data.mappers.toDomain
+import com.maathisv.vigotrack.data.mappers.toEntity
 import com.maathisv.vigotrack.models.ActivitySession
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map

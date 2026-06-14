@@ -1,23 +1,52 @@
 package com.maathisv.vigotrack.ui.screens
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Text
+import androidx.compose.material3.VerticalDivider
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.maathisv.vigotrack.models.*
+import com.maathisv.vigotrack.models.ActivityCategory
+import com.maathisv.vigotrack.models.ActivityStatus
+import com.maathisv.vigotrack.models.ActivityType
+import com.maathisv.vigotrack.ui.components.ActivityTypeChips
 import com.maathisv.vigotrack.ui.components.AppTopBar
-import com.maathisv.vigotrack.ui.components.MiniGraph
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import kotlin.math.sqrt
+import com.maathisv.vigotrack.ui.components.CompactSensorDataCard
+import com.maathisv.vigotrack.ui.components.PatientCheckboxRow
+import com.maathisv.vigotrack.ui.components.SensorDataCard
+import com.maathisv.vigotrack.ui.components.SessionStatusCard
+import com.maathisv.vigotrack.ui.components.StartStopControls
+import com.maathisv.vigotrack.ui.components.buildDisplayLinks
+import com.maathisv.vigotrack.ui.viewmodel.HomeViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,15 +73,18 @@ fun ActivitySessionScreen(
     val checkedSensorIds = remember { mutableStateMapOf<String, Boolean>() }
     var compactView by remember { mutableStateOf(false) }
 
-    LaunchedEffect(activityId) {
-        activity?.links?.forEach { link ->
-            checkedSensorIds["${link.sensorId}_${link.patientId}"] = true
-        }
-        if (activity?.links.isNullOrEmpty()) {
-            preLinks.forEach { preLink ->
-                val key = "${preLink.sensorId}_${preLink.patientId}"
-                if (!checkedSensorIds.containsKey(key)) {
-                    checkedSensorIds[key] = true
+    val activityLoaded = activity != null
+    LaunchedEffect(activityId, activityLoaded) {
+        if (activity != null) {
+            activity.links.forEach { link ->
+                checkedSensorIds["${link.sensorId}_${link.patientId}"] = true
+            }
+            if (activity.links.isEmpty()) {
+                preLinks.forEach { preLink ->
+                    val key = "${preLink.sensorId}_${preLink.patientId}"
+                    if (!checkedSensorIds.containsKey(key)) {
+                        checkedSensorIds[key] = true
+                    }
                 }
             }
         }
@@ -98,7 +130,7 @@ fun ActivitySessionScreen(
                                     selectedType = currentType,
                                     onTypeSelected = { newType ->
                                         if (newType != currentType) {
-                    if (activity.isRunning) {
+                                            if (activity.isRunning) {
                                                 homeViewModel.splitActivityOnTypeChange(
                                                     activity, newType
                                                 ) { newId ->
@@ -140,7 +172,7 @@ fun ActivitySessionScreen(
                                                     displayItem.features
                                                 )
                                             }
-                if (activity.isRunning) {
+                                            if (activity.isRunning) {
                                                 homeViewModel.startPatientStream(displayItem.sensorId, displayItem.features)
                                             }
                                         } else {
@@ -156,7 +188,7 @@ fun ActivitySessionScreen(
                     item { StartStopControls(activity, homeViewModel, checkedSensorIds.keys.toSet()) }
                 }
 
-                    if (activity.status != ActivityStatus.SCHEDULED) {
+                if (activity.status != ActivityStatus.SCHEDULED) {
                     item {
                         SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                             SegmentedButton(
@@ -208,396 +240,6 @@ fun ActivitySessionScreen(
                         }
                     }
                 }
-            }
-        }
-    }
-}
-
-private data class DisplayLink(
-    val patientId: Long?,
-    val patientName: String,
-    val sensorId: String,
-    val sensorDisplayName: String?,
-    val features: List<String>
-)
-
-private fun buildDisplayLinks(
-    preLinks: List<SensorPatientLink>,
-    activityLinks: List<ActivitySession.ActivityLink>,
-    patients: List<Patient>,
-    connectedSensors: List<Sensor>
-): List<DisplayLink> {
-    val result = mutableListOf<DisplayLink>()
-
-    preLinks.forEach { link ->
-        val sensor = connectedSensors.find { it.deviceId == link.sensorId }
-        val patient = patients.find { it.id == link.patientId }
-        result.add(
-            DisplayLink(
-                patientId = link.patientId,
-                patientName = patient?.name ?: "Inconnu",
-                sensorId = link.sensorId,
-                sensorDisplayName = sensor?.effectiveName,
-                features = link.features
-            )
-        )
-    }
-
-    activityLinks.forEach { link ->
-        if (result.none { it.sensorId == link.sensorId && it.patientId == link.patientId }) {
-            val sensor = connectedSensors.find { it.deviceId == link.sensorId }
-            result.add(
-                DisplayLink(
-                    patientId = link.patientId,
-                    patientName = link.patientName,
-                    sensorId = link.sensorId,
-                    sensorDisplayName = sensor?.effectiveName,
-                    features = link.featuresToTrack
-                )
-            )
-        }
-    }
-
-    return result
-}
-
-@Composable
-private fun ActivityTypeChips(
-    activiteTypes: List<ActivityType>,
-    bilanTypes: List<ActivityType>,
-    selectedType: ActivityType?,
-    onTypeSelected: (ActivityType) -> Unit
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Type d'activité", style = MaterialTheme.typography.labelMedium)
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            activiteTypes.forEach { type ->
-                FilterChip(
-                    selected = selectedType == type,
-                    onClick = { onTypeSelected(type) },
-                    label = { Text(type.displayName) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun PatientCheckboxRow(
-    displayItem: DisplayLink,
-    isChecked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isChecked)
-                MaterialTheme.colorScheme.secondaryContainer
-            else MaterialTheme.colorScheme.surfaceVariant
-        )
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Checkbox(
-                checked = isChecked,
-                onCheckedChange = onCheckedChange
-            )
-            Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
-                Text(displayItem.patientName, style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    text = "${displayItem.sensorDisplayName ?: displayItem.sensorId} — ${displayItem.features.joinToString(", ")}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
-
-private data class FeatureData(
-    val label: String,
-    val valueText: String,
-    val unit: String,
-    val valueColor: Color,
-    val graphValue: Float?,
-    val graphColor: Color,
-    val maxPoints: Int = 100
-)
-
-@Composable
-private fun FeatureCell(data: FeatureData, modifier: Modifier) {
-    Row(
-        modifier = modifier.height(IntrinsicSize.Min),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Column(modifier = Modifier.width(70.dp)) {
-            Text(data.label, style = MaterialTheme.typography.labelSmall)
-            Text(
-                text = data.valueText,
-                style = MaterialTheme.typography.titleLarge,
-                color = data.valueColor
-            )
-            Text(data.unit, style = MaterialTheme.typography.labelSmall)
-        }
-        MiniGraph(
-            currentValue = data.graphValue,
-            lineColor = data.graphColor,
-            maxPoints = data.maxPoints,
-            modifier = Modifier.weight(1f).height(36.dp)
-        )
-    }
-}
-
-@Composable
-fun SensorDataCard(
-    link: ActivitySession.ActivityLink,
-    sensorName: String? = null,
-    sensorData: Map<String, Any>?,
-    showFeatures: Map<String, Boolean> = emptyMap(),
-    columns: Int = 2
-) {
-    val hrValue = (sensorData?.get("HR") as? Number)?.toFloat()
-    val ppiValue = (sensorData?.get("PPI") as? Number)?.toFloat()
-    val ecgValue = (sensorData?.get("ECG") as? Number)?.toFloat()
-
-    val accX = (sensorData?.get("ACC_X") as? Number)?.toFloat() ?: 0f
-    val accY = (sensorData?.get("ACC_Y") as? Number)?.toFloat() ?: 0f
-    val accZ = (sensorData?.get("ACC_Z") as? Number)?.toFloat() ?: 0f
-    val rawMag = sqrt(accX * accX + accY * accY + accZ * accZ)
-    val gravityRemoved = if (rawMag >= 1000f) rawMag - 1000f else 1000f - rawMag
-    val accMagnitude = gravityRemoved * 9.81f / 1000f
-
-    val features = listOfNotNull(
-        if (link.streamHR && showFeatures.getOrDefault("HR", true)) FeatureData(
-            label = "HR", valueText = "${hrValue?.toInt() ?: "--"}", unit = "bpm",
-            valueColor = MaterialTheme.colorScheme.primary,
-            graphValue = hrValue, graphColor = MaterialTheme.colorScheme.primary
-        ) else null,
-        if (link.streamPPI && showFeatures.getOrDefault("PPI", true)) FeatureData(
-            label = "PPI", valueText = "${ppiValue?.toInt() ?: "--"}", unit = "ms",
-            valueColor = MaterialTheme.colorScheme.onSurface,
-            graphValue = ppiValue, graphColor = MaterialTheme.colorScheme.secondary
-        ) else null,
-        if (link.streamACC && showFeatures.getOrDefault("ACC", true)) FeatureData(
-            label = "ACC", valueText = "%.1f".format(accMagnitude), unit = "m/s²",
-            valueColor = MaterialTheme.colorScheme.onSurface,
-            graphValue = if (accMagnitude > 0f) accMagnitude else null,
-            graphColor = MaterialTheme.colorScheme.tertiary
-        ) else null,
-        if (link.streamECG && showFeatures.getOrDefault("ECG", true)) FeatureData(
-            label = "ECG", valueText = "${ecgValue?.toInt() ?: "--"}", unit = "uV",
-            valueColor = MaterialTheme.colorScheme.error,
-            graphValue = ecgValue, graphColor = MaterialTheme.colorScheme.error,
-            maxPoints = 200
-        ) else null
-    )
-
-    val rows = features.chunked(columns)
-
-    Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp).height(IntrinsicSize.Min)
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = "Patient : ${link.patientName}", style = MaterialTheme.typography.titleMedium)
-                Text(text = "Capteur : ${sensorName ?: link.sensorId}", style = MaterialTheme.typography.labelSmall)
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    rows.forEach { row ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            row.forEach { f -> FeatureCell(f, Modifier.weight(1f)) }
-                            repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
-                        }
-                    }
-                }
-            }
-
-            VerticalDivider(
-                modifier = Modifier
-                    .height(IntrinsicSize.Min)
-                    .padding(horizontal = 12.dp)
-            )
-
-            Column(
-                modifier = Modifier.width(70.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = "Intensité",
-                    style = MaterialTheme.typography.labelSmall
-                )
-                Text(
-                    text = "--",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun StartStopControls(activity: ActivitySession, homeViewModel: HomeViewModel, checkedKeys: Set<String> = emptySet()) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.Center
-    ) {
-        Button(
-            onClick = {
-                when (activity.status) {
-                    ActivityStatus.COMPLETED -> homeViewModel.resumeActivity(activity)
-                    else -> homeViewModel.toggleSession(activity, checkedKeys)
-                }
-            },
-            colors = when {
-                activity.isRunning -> ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
-                activity.status == ActivityStatus.COMPLETED -> ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
-                else -> ButtonDefaults.buttonColors()
-            },
-            modifier = Modifier.fillMaxWidth().height(56.dp)
-        ) {
-            Text(
-                when (activity.status) {
-                    ActivityStatus.COMPLETED -> "REPRENDRE"
-                    ActivityStatus.IN_PROGRESS -> "ARRÊTER LA SESSION"
-                    else -> "DÉMARRER LA SESSION"
-                }
-            )
-        }
-    }
-}
-
-@Composable
-fun SessionStatusCard(
-    activity: ActivitySession,
-    onMarkStale: () -> Unit = {},
-    onUnmarkStale: () -> Unit = {}
-) {
-    val dateFormat = remember { SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()) }
-    var showMenu by remember { mutableStateOf(false) }
-
-    Card(
-        modifier = Modifier.fillMaxWidth().padding(8.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (activity.isStale) MaterialTheme.colorScheme.errorContainer
-                             else MaterialTheme.colorScheme.surface
-        )
-    ) {
-        Column(modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 16.dp, end = 8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = if (activity.isStale) "INVALIDÉ" else "Statut : ${activity.status}",
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = if (activity.isStale) MaterialTheme.colorScheme.onErrorContainer
-                                else MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(text = "Type : ${activity.activityType.displayName}")
-                    Text(text = "Date : ${dateFormat.format(Date(activity.scheduledDate))}")
-                }
-                Box {
-                    IconButton(onClick = { showMenu = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "Plus")
-                    }
-                    DropdownMenu(
-                        expanded = showMenu,
-                        onDismissRequest = { showMenu = false }
-                    ) {
-                        if (activity.isStale) {
-                            DropdownMenuItem(
-                                text = { Text("Annuler l'invalidation") },
-                                onClick = {
-                                    showMenu = false
-                                    onUnmarkStale()
-                                }
-                            )
-                        } else {
-                            DropdownMenuItem(
-                                text = { Text("Invalider") },
-                                onClick = {
-                                    showMenu = false
-                                    onMarkStale()
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CompactSensorDataCard(
-    link: ActivitySession.ActivityLink,
-    sensorName: String? = null,
-    sensorData: Map<String, Any>?,
-    showFeatures: Map<String, Boolean> = emptyMap(),
-    modifier: Modifier = Modifier
-) {
-    val hrValue = (sensorData?.get("HR") as? Number)?.toInt()
-    val ppiValue = (sensorData?.get("PPI") as? Number)?.toInt()
-    val ecgValue = (sensorData?.get("ECG") as? Number)?.toInt()
-
-    val accX = (sensorData?.get("ACC_X") as? Number)?.toFloat() ?: 0f
-    val accY = (sensorData?.get("ACC_Y") as? Number)?.toFloat() ?: 0f
-    val accZ = (sensorData?.get("ACC_Z") as? Number)?.toFloat() ?: 0f
-    val rawMag = sqrt(accX * accX + accY * accY + accZ * accZ)
-    val gravityRemoved = if (rawMag >= 1000f) rawMag - 1000f else 1000f - rawMag
-    val accMagnitude = gravityRemoved * 9.81f / 1000f
-
-    Card(
-        modifier = modifier.fillMaxWidth().padding(vertical = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp).height(IntrinsicSize.Min),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "${link.patientName} (${sensorName ?: link.sensorId})",
-                    style = MaterialTheme.typography.labelMedium
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    if (link.streamHR && showFeatures.getOrDefault("HR", true)) {
-                        Text("HR: ${hrValue ?: "--"}", style = MaterialTheme.typography.bodySmall)
-                    }
-                    if (link.streamPPI && showFeatures.getOrDefault("PPI", true)) {
-                        Text("PPI: ${ppiValue ?: "--"}", style = MaterialTheme.typography.bodySmall)
-                    }
-                    if (link.streamACC && showFeatures.getOrDefault("ACC", true)) {
-                        Text("ACC: ${"%.1f".format(accMagnitude)}", style = MaterialTheme.typography.bodySmall)
-                    }
-                    if (link.streamECG && showFeatures.getOrDefault("ECG", true)) {
-                        Text("ECG: ${ecgValue ?: "--"}", style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            }
-            VerticalDivider(
-                modifier = Modifier.height(IntrinsicSize.Min).padding(horizontal = 8.dp)
-            )
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.width(50.dp)
-            ) {
-                Text("Intensité", style = MaterialTheme.typography.labelSmall)
-                Text("--", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
             }
         }
     }

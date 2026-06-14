@@ -1,6 +1,11 @@
 package com.maathisv.vigotrack.data.dao
 
-import androidx.room.*
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import androidx.room.Transaction
+import androidx.room.Update
 import com.maathisv.vigotrack.data.ActivityWithLinks
 import com.maathisv.vigotrack.data.entities.ActivityLinkEntity
 import com.maathisv.vigotrack.data.entities.ActivitySessionEntity

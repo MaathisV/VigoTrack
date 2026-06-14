@@ -1,36 +1,44 @@
-package com.maathisv.vigotrack.ui.screens
+package com.maathisv.vigotrack.ui.viewmodel
 
 import android.app.Application
 import android.content.Intent
 import android.util.Log
+import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.core.content.edit
 import com.maathisv.vigotrack.data.PatientDataSource
 import com.maathisv.vigotrack.data.SensorPatientLinkDataSource
 import com.maathisv.vigotrack.data.StageDataSource
+import com.maathisv.vigotrack.models.ActivitySession
+import com.maathisv.vigotrack.models.ActivityType
 import com.maathisv.vigotrack.models.Patient
 import com.maathisv.vigotrack.models.Sensor
 import com.maathisv.vigotrack.models.SensorPatientLink
 import com.maathisv.vigotrack.models.Stage
 import com.maathisv.vigotrack.repository.ActivityRepository
 import com.maathisv.vigotrack.repository.SensorRepository
+import com.maathisv.vigotrack.services.ACTION_START_STREAMS
+import com.maathisv.vigotrack.services.ACTION_STOP_STREAMS
+import com.maathisv.vigotrack.services.DEFAULT_TEMPLATE
+import com.maathisv.vigotrack.services.EXTRA_ACTIVITY_CATEGORY
+import com.maathisv.vigotrack.services.EXTRA_ACTIVITY_NAME
+import com.maathisv.vigotrack.services.EXTRA_PATIENT_NAMES
+import com.maathisv.vigotrack.services.EXTRA_SENSOR_IDS
+import com.maathisv.vigotrack.services.EXTRA_SESSION_DATE
+import com.maathisv.vigotrack.services.EXTRA_STAGE_NAME
+import com.maathisv.vigotrack.services.SensorService
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import com.maathisv.vigotrack.models.ActivitySession
-import com.maathisv.vigotrack.models.ActivityType
-import com.maathisv.vigotrack.services.*
-import com.maathisv.vigotrack.services.PolarService
+import kotlinx.coroutines.withContext
 
 class HomeViewModel(
     private val application: Application,
@@ -79,6 +87,12 @@ class HomeViewModel(
         return sensorRepo.getAvailableFeaturesForDevice(deviceId)
     }
 
+    fun getSupportedSettings(deviceId: String, feature: String) {
+        viewModelScope.launch {
+            sensorRepo.getSupportedSettings(deviceId, feature)
+        }
+    }
+
     private val _currentLogUri = MutableStateFlow(getSavedLogUri())
     val currentLogUri: StateFlow<String> = _currentLogUri.asStateFlow()
 
@@ -98,7 +112,10 @@ class HomeViewModel(
             "HR" to prefs.getBoolean("${prefix}_HR", true),
             "PPI" to prefs.getBoolean("${prefix}_PPI", true),
             "ACC" to prefs.getBoolean("${prefix}_ACC", true),
-            "ECG" to prefs.getBoolean("${prefix}_ECG", true)
+            "ECG" to prefs.getBoolean("${prefix}_ECG", true),
+            "EULER" to prefs.getBoolean("${prefix}_EULER", true),
+            "QUATERNION" to prefs.getBoolean("${prefix}_QUATERNION", true),
+            "FREE_ACCELERATION" to prefs.getBoolean("${prefix}_FREE_ACCELERATION", true)
         )
     }
 
@@ -251,7 +268,7 @@ class HomeViewModel(
     fun toggleSession(activity: ActivitySession, checkedKeys: Set<String> = emptySet()) {
         viewModelScope.launch {
             // Use getApplication() here!
-            val intent = Intent(getApplication(), PolarService::class.java)
+            val intent = Intent(getApplication(), SensorService::class.java)
 
             if (activity.isRunning) {
                 activityRepo.stopActivity(activity)
@@ -307,16 +324,16 @@ class HomeViewModel(
                 sensorRepo.startActivityStreaming(updatedActivity)
 
                 val sensorIds = allActiveLinks.map { it.sensorId }.toTypedArray()
-                val firstLink = allActiveLinks.firstOrNull()
+                val patientNames = allActiveLinks.map { it.patientName }.toTypedArray()
                 val stageName = activity.stageId?.let { id ->
                     stages.value.find { it.id == id }?.name
                 } ?: "NoStage"
-                val intent = Intent(getApplication(), PolarService::class.java).apply {
+                val intent = Intent(getApplication(), SensorService::class.java).apply {
                     action = ACTION_START_STREAMS
                     putExtra(EXTRA_SENSOR_IDS, sensorIds)
+                    putExtra(EXTRA_PATIENT_NAMES, patientNames)
                     putExtra(EXTRA_ACTIVITY_NAME, activity.activityType.displayName)
                     putExtra(EXTRA_ACTIVITY_CATEGORY, activity.activityType.category.name)
-                    putExtra(EXTRA_PATIENT_NAME, firstLink?.patientName ?: "")
                     putExtra(EXTRA_STAGE_NAME, stageName)
                     putExtra(EXTRA_SESSION_DATE, System.currentTimeMillis())
                 }
@@ -411,15 +428,16 @@ class HomeViewModel(
             sensorRepo.startActivityStreaming(filtered)
 
             val sensorIds = resumed.links.map { it.sensorId }.toTypedArray()
+            val patientNames = resumed.links.map { it.patientName }.toTypedArray()
             val stageName = resumed.stageId?.let { id ->
                 stages.value.find { it.id == id }?.name
             } ?: "NoStage"
-            val intent = Intent(getApplication(), PolarService::class.java).apply {
+            val intent = Intent(getApplication(), SensorService::class.java).apply {
                 action = ACTION_START_STREAMS
                 putExtra(EXTRA_SENSOR_IDS, sensorIds)
+                putExtra(EXTRA_PATIENT_NAMES, patientNames)
                 putExtra(EXTRA_ACTIVITY_NAME, resumed.activityType.displayName)
                 putExtra(EXTRA_ACTIVITY_CATEGORY, resumed.activityType.category.name)
-                putExtra(EXTRA_PATIENT_NAME, resumed.links.firstOrNull()?.patientName ?: "")
                 putExtra(EXTRA_STAGE_NAME, stageName)
                 putExtra(EXTRA_SESSION_DATE, System.currentTimeMillis())
             }

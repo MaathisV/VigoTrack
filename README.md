@@ -6,9 +6,9 @@
 ![Kotlin](https://img.shields.io/badge/kotlin-2.3.21-7F52FF?logo=kotlin)
 ![License](https://img.shields.io/badge/license-TBD-lightgrey)
 
-> Rehabilitation data collection via Polar BLE heart rate sensors.
+> Rehabilitation data collection via Polar and Xsens Dot BLE sensors.
 
-VigoTrack is an Android application built with Kotlin and Jetpack Compose that connects to Polar BLE (Bluetooth Low Energy) wearable sensors to stream, visualize, and log biometric data during physical therapy and rehabilitation sessions. It supports multiple patients, multiple sensors, and structured therapy stages with CSV export.
+VigoTrack is an Android application built with Kotlin and Jetpack Compose that connects to Polar BLE and Xsens Dot wearable sensors to stream, visualize, and log biometric data during physical therapy and rehabilitation sessions. It supports multiple patients, multiple sensors (simultaneous Polar + Xsens), and structured therapy stages with CSV export.
 
 ---
 
@@ -27,11 +27,16 @@ VigoTrack is an Android application built with Kotlin and Jetpack Compose that c
 - **Stage Management** — Organize rehabilitation into named periods with start/end dates
 - **Activity Sessions** — Create data-collection sessions with types: MARCHE, APA, HIIT, RENFORCEMENT, PISCINE, TDM6, 10m walk test, REPOS
 - **Bilan Grid** — Matrix view of patients vs. assessment types for quick recording
-- **Multi-Sensor BLE** — Connect to multiple Polar Pacer Pro (and compatible) devices simultaneously
-- **Real-Time Streaming** — Live HR, PPI, Accelerometer (X/Y/Z), and ECG data with Canvas-based mini-graphs
+- **Multi-Vendor BLE** — Connect to Polar and Xsens Dot devices simultaneously via a pluggable `VendorApi` abstraction
+- **Real-Time Streaming** — Live HR, PPI, Accelerometer (X/Y/Z), ECG, Euler angles, Quaternion, and Free Acceleration with Canvas-based mini-graphs
+- **Compact / Graph Toggle** — Switch between full sensor cards with mini-graphs and a compact data row view
+- **Per-Feature Visibility & Logging** — Independently toggle which data features display on screen and which are written to CSV per sensor
+- **Activity Invalidation** — Mark completed activities as invalid (`INVALIDÉ`) via a 3-dot menu, with `errorContainer` visual styling
+- **Resume Completed Activities** — Reprise button to restart streaming on previously completed sessions
+- **Accumulated Time** — Elapsed time persists across pauses, resumes, and app restarts
 - **Patient Management** — Add/delete patients, pre-link them to sensors with default feature selections
 - **Data Export** — Log all streamed data to structured files using Android SAF with a customizable file naming template
-- **Foreground Service** — Keeps BLE connections alive and data streaming in the background
+- **Foreground Service** — Keeps BLE connections alive and data streaming in the background via `SensorService`
 - **Dark/Light Theme** — Material 3 with dynamic color support (Android 12+) and brand palette
 
 ---
@@ -41,7 +46,7 @@ VigoTrack is an Android application built with Kotlin and Jetpack Compose that c
 ### Requirements
 
 - Android 13+ (API 33)
-- A compatible Polar BLE device (e.g., Polar Pacer Pro)
+- A compatible Polar BLE device (e.g., Polar Pacer Pro) or Xsens Dot wearable
 
 ### Installation
 
@@ -57,9 +62,9 @@ Open in Android Studio, sync Gradle, and run on a connected device.
 
 1. **Add a Stage** — Tap `+` on the main screen to create a rehabilitation stage
 2. **Create an Activity** — Tap a stage, then tap a date to create a new activity session
-3. **Connect a Sensor** — Open settings (gear icon) → scan for Polar devices → connect
+3. **Connect a Sensor** — Open settings (gear icon) → scan for nearby devices → connect
 4. **Link a Patient** — In settings, assign a patient to the connected sensor
-5. **Start Streaming** — In the activity session screen, tap a patient card to begin recording
+5. **Start Streaming** — In the activity session screen, toggle between **Graph** and **Compact** view, then tap a patient card to begin recording
 6. **Export Data** — Choose an export folder in settings; CSV files are written automatically
 
 ### Stages
@@ -75,15 +80,15 @@ Each activity belongs to one of two categories:
 | **Activité** | MARCHE, APA, HIIT, RENFORCEMENT, PISCINE |
 | **Bilan** | TDM6 (6-minute walk test), 10m (10-meter walk), REPOS |
 
-Activities can be **Scheduled**, **In Progress**, or **Completed**. You can change the activity type mid-session, which automatically splits the session.
+Activities can be **Scheduled**, **In Progress**, **Completed**, or **Invalidated** (no effect on the recorded files, PLANNED). Completed activities can be resumed via the **REPRENDRE** button, which restarts streaming and continues accumulating elapsed time. You can change the activity type mid-session, which automatically splits the session.
 
 ### Bilan Grid
 
 Navigate to the Bilan screen to see a matrix of patients vs. assessment types. Tap any cell to start or record that assessment. Completed assessments show a checkmark.
 
-### Connecting Polar Sensors
+### Connecting Sensors
 
-Open the settings dialog from any screen via the gear icon. The **Devices** tab lists available Polar sensors. Scans discover nearby BLE devices. Once connected, the connection state transitions through:
+Open the settings dialog from any screen via the gear icon. The **Devices** tab lists available sensors from all active vendors (Polar, Xsens). Each device shows a vendor badge (`POLAR` or `XSENS`). Scans discover nearby BLE devices from every registered vendor. Once connected, the connection state transitions through:
 
 `NOT_CONNECTED` → `CONNECTING` → `CONNECTED` → `FEATURES_READY`
 
@@ -91,15 +96,19 @@ Use the **Links** tab to pre-configure patient-sensor-feature associations. Sens
 
 ### Live Data Visualization
 
-During an active session, each linked patient displays a color-coded card showing:
-- **HR** — Beats per minute with mini line chart
+During an active session, each linked patient displays color-coded cards showing live values for the streamed data types. Use the **Graph** / **Compact** toggle to switch between full cards (with mini line charts) and a dense data row view.
+
+Available data types (each independently togglable for display and logging via the devices dialog):
+- **HR** — Beats per minute
 - **PPI** — Pulse-to-pulse interval in ms
-- **ACC** — Accelerometer magnitude with mini chart (X/Y/Z axes)
-- **ECG** — Voltage in µV with mini chart
+- **ACC** — Accelerometer magnitude in m/s²
+- **ECG** — Voltage in µV
+- **EULER** — Roll / Pitch / Yaw angles (Xsens Dot)
+- **FREE ACC** — Free acceleration X/Y/Z in m/s² (Xsens Dot)
 
 ### Data Export
 
-Streamed data is logged to CSV files using the Android Storage Access Framework. The default file naming template is:
+Streamed data is logged to CSV files using the Android Storage Access Framework. Per-feature **log toggles** (in the devices dialog) control which data types produce CSV files — only enabled features are written. The default file naming template is:
 
 ```
 {stage}/{patient}/{category}/{activity}_{datetime}/{sensor}_{tag}
@@ -115,7 +124,7 @@ Available placeholders:
 | `{activity}` | Activity type |
 | `{sensor}` | Sensor display name |
 | `{device}` | Device address |
-| `{tag}` | Data type (HR, PPI, ACC, ECG) |
+| `{tag}` | Data type (HR, PPI, ACC, ECG, EULER, QUATERNION, FREE_ACCELERATION) |
 | `{date}` | Current date (yyyyMMdd) |
 | `{time}` | Current time (HHmmss) |
 | `{datetime}` | Date + time |
@@ -136,7 +145,9 @@ Each data type produces a separate CSV file with appropriate headers.
 | **Navigation** | Navigation Compose 2.9.8 |
 | **Architecture** | MVVM (ViewModel + StateFlow + Repository) |
 | **Database** | Room 2.8.4 (KSP) |
-| **BLE SDK** | Polar BLE SDK 7.1.0 (JitPack) |
+| **BLE SDK (Polar)** | Polar BLE SDK 7.1.0 (JitPack) |
+| **BLE SDK (Xsens)** | Xsens Dot SDK 2.x (proprietary `.aar` — not in build by default) |
+| **Vendor Abstraction** | Custom `VendorApi` interface |
 | **Reactive** | RxJava 3, RxAndroid 3, coroutines-rx3 bridge |
 | **DI** | Manual (via Application class) |
 | **Build** | Gradle KTS, AGP 8.9.1, JDK 17 |
@@ -163,15 +174,20 @@ app/src/main/java/com/maathisv/vigotrack/
 ├── MainActivity.kt                 # Entry point, permissions, NavHost
 ├── models/                         # Domain models (Patient, Stage, Sensor, etc.)
 ├── data/
-│   ├── VigoTrackDatabase.kt        # Room database (v5)
+│   ├── VigoTrackDatabase.kt        # Room database (v7)
 │   ├── dao/                        # Room DAOs (5 tables)
 │   ├── entities/                   # Room entities (6 tables)
 │   └── mappers/                    # Entity ↔ Domain mappers
+├── sensor/
+│   ├── api/                        # VendorApi interface + sealed data types (SensorDataPoint, SensorEvent, SensorDataType)
+│   ├── polar/                      # PolarVendorApi + PolarMappers (wraps PolarBleApi)
+│   └── xsens/                      # XsensVendorApi placeholder + XsensMappers (requires AAR)
 ├── repository/
-│   ├── SensorRepository.kt         # Polar BLE API wrapper
-│   └── ActivityRepository.kt       # Activity CRUD
+│   ├── SensorRepository.kt         # Vendor-agnostic BLE management via VendorApiRegistry
+│   ├── ActivityRepository.kt       # Activity CRUD
+│   └── VendorApiRegistry.kt        # Routes SDK calls to the correct VendorApi by vendor name
 ├── services/
-│   └── PolarService.kt             # Foreground LifecycleService
+│   └── SensorService.kt            # Foreground LifecycleService (logs from unified sensorDataFlow)
 ├── ui/
 │   ├── navigation/                 # NavGraph + route definitions
 │   ├── screens/                    # Screen composables + ViewModel
@@ -191,28 +207,52 @@ UI (Compose) → HomeViewModel → Repository → Room Database / Polar SDK
 
 `HomeViewModel` is a shared `AndroidViewModel` injected via the Navigation Graph. It exposes state via `StateFlow`/`SharedFlow`. Repositories are initialized lazily in `VigoTrackApplication` and passed through.
 
-The `SensorRepository` wraps the `PolarBleApi` and manages BLE scanning, connection lifecycle, auto-reconnection, and data streaming. It exposes `SharedFlow`s for each data type (HR, PPI, ACC, ECG).
+The `SensorRepository` manages BLE scanning, connection lifecycle, auto-reconnection, and data streaming via a `VendorApiRegistry`. Each vendor (Polar, Xsens) implements the `VendorApi` interface and is registered in `VigoTrackApplication`. The repository exposes a unified `sensorDataFlow: SharedFlow<Pair<String, SensorDataPoint>>` for all data types from all vendors, and a `liveData: StateFlow<Map<String, Map<String, Any>>>` for the UI.
 
 ### Database Schema
 
 | Table | Key Columns | Description |
 |---|---|---|
 | `stages` | id, name, startDate, endDate | Rehabilitation phases |
-| `activities` | id (String UUID), activityType, scheduledDate, startTime, endTime, isRunning, stageId (FK) | Data-collection sessions |
+| `activities` | id (String UUID), activityType, scheduledDate, startTime, endTime, isRunning, accumulatedTimeMs, isStale, stageId (FK) | Data-collection sessions |
 | `activity_links` | linkId, parentActivityId (FK), patientId (FK), patientName, sensorId (FK), features | Links activities to patients/sensors |
 | `patients` | id, name, isCalibrated, createdAt | Patient records |
-| `sensors` | deviceId (PK), address, name, displayName, lastSeen | Paired Polar devices |
+| `sensors` | deviceId (PK), address, name, displayName, lastSeen, vendor | Paired devices from any vendor |
 | `sensor_patient_links` | id, patientId (FK), sensorId (FK), features | Pre-configured patient-sensor associations |
 
 ### Key Dependencies
 
 All versions are managed via `gradle/libs.versions.toml`. Major dependencies:
 
-- `com.github.polarofficial:polar-ble-sdk:7.1.0` — Polar BLE communication
+- `com.github.polarofficial:polar-ble-sdk:7.1.0` — Polar BLE communication (Maven, auto-downloaded)
+- **Xsens Dot AARs — NOT in the Gradle build by default.** The `app/libs/` directory doesn't exist. The app compiles and runs without it (XsensVendorApi returns empty flows — no crash, no error). To activate:
+  1. Obtain `XsensDotSdkCore2.aar` + `XsensDotCore.aar` from Movella
+  2. Create `app/libs/` and copy the AARs there
+  3. Add to `app/build.gradle.kts` dependencies:
+     ```kotlin
+     implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.aar"))))
+     ```
 - `androidx.room:room-*:2.8.4` — Local persistence
 - `androidx.compose:compose-bom:2025.02.00` — Compose UI toolkit
 - `io.reactivex.rxjava3:rxjava:3.1.12` — Reactive streams
 - `androidx.navigation:navigation-compose:2.9.8` — Screen navigation
+
+> **Note:** Only Polar BLE integration has been tested end-to-end. Xsens Dot vendor support and the multi-vendor `VendorApi` framework are implemented as a compatible abstraction but remain untested with real hardware.
+
+### Adding a New Vendor
+
+0. **Add SDK dependency** to `app/build.gradle.kts` (Maven coordinate or local AAR via `fileTree`)
+1. **Implement `VendorApi`** in `sensor/<vendor>/` with the interface methods (`startScanning()`, `connectToDevice()`, `startStreaming()`, etc.)
+2. **Create mapper functions** to convert the vendor's SDK types to `SensorDataPoint` sealed subtypes
+3. **Register** the new `VendorApi` instance in `VigoTrackApplication.vendorRegistry`:
+   ```kotlin
+   private val vendorRegistry by lazy {
+       VendorApiRegistry(listOf(polarVendorApi, xsensVendorApi, myNewVendorApi))
+   }
+   ```
+4. All SDK routing happens automatically via the `vendorName` string stored in `Sensor.vendor`.
+
+> **Note:** Only Polar has been tested with physical devices. If you integrate or verify a new vendor implementation, please update this note accordingly.
 
 ### Testing
 

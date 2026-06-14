@@ -8,9 +8,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import com.maathisv.vigotrack.ui.screens.ActivitySessionScreen
 import com.maathisv.vigotrack.ui.screens.BilanScreen
-import com.maathisv.vigotrack.ui.screens.HomeViewModel
 import com.maathisv.vigotrack.ui.screens.StageDetailScreen
 import com.maathisv.vigotrack.ui.screens.StagesListScreen
+import com.maathisv.vigotrack.ui.viewmodel.HomeViewModel
 
 sealed class NavRoutes(val route: String) {
     object StagesList : NavRoutes("stages")
