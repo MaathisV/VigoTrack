@@ -405,7 +405,7 @@ class HomeViewModel(
 
     fun resumeActivity(activity: ActivitySession) {
         viewModelScope.launch {
-            val resumed = activity.copy(endTime = null, isRunning = true)
+            val resumed = activity.copy(startTime = System.currentTimeMillis(), endTime = null, isRunning = true)
             activityRepo.updateActivity(resumed)
             val activeFeatures = getActiveFeatures()
             val filtered = resumed.copy(

@@ -314,7 +314,7 @@ private fun ActivityRow(session: ActivitySession, onClick: () -> Unit, onMarkSta
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                val durationText = formatDuration(session.startTime, session.endTime, session.isRunning)
+                val durationText = formatDuration(session)
                 if (durationText != null) {
                     Text(
                         text = durationText,
@@ -350,10 +350,10 @@ private fun ActivityRow(session: ActivitySession, onClick: () -> Unit, onMarkSta
     }
 }
 
-private fun formatDuration(startTime: Long?, endTime: Long?, isRunning: Boolean): String? {
-    if (isRunning) return "En cours…"
-    if (startTime != null && endTime != null) {
-        val diffMs = endTime - startTime
+private fun formatDuration(session: ActivitySession): String? {
+    if (session.isRunning) return "En cours…"
+    if (session.endTime != null) {
+        val diffMs = session.accumulatedTimeMs
         val totalMinutes = diffMs / 60_000
         if (totalMinutes < 1) return "< 1 min"
         return if (totalMinutes < 60) {

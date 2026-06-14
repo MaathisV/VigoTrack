@@ -9,6 +9,7 @@ data class ActivitySession(
     val scheduledDate: Long,
     val startTime: Long? = null,
     val endTime: Long? = null,
+    val accumulatedTimeMs: Long = 0,
     val isRunning: Boolean = false,
     val stageId: Long? = null,
     val isStale: Boolean = false
