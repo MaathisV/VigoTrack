@@ -9,11 +9,15 @@ data class ActivitySession(
     val scheduledDate: Long,
     val startTime: Long? = null,
     val endTime: Long? = null,
-    val isRunning: Boolean = false
+    val accumulatedTimeMs: Long = 0,
+    val isRunning: Boolean = false,
+    val stageId: Long? = null,
+    val isStale: Boolean = false
 ) {
     // Determine status based on flags
     val status: ActivityStatus
         get() = when {
+            isStale -> ActivityStatus.STALE
             endTime != null -> ActivityStatus.COMPLETED
             isRunning -> ActivityStatus.IN_PROGRESS
             else -> ActivityStatus.SCHEDULED
@@ -25,13 +29,16 @@ data class ActivitySession(
         val sensorId: String,
         val featuresToTrack: List<String> = emptyList()
     ) {
-        // UI Helpers: The screen is looking for these booleans
         val streamHR: Boolean get() = featuresToTrack.contains("HR")
-        val streamECG: Boolean get() = featuresToTrack.contains("ECG")
+        val streamPPI: Boolean get() = featuresToTrack.contains("PPI")
         val streamACC: Boolean get() = featuresToTrack.contains("ACC")
+        val streamECG: Boolean get() = featuresToTrack.contains("ECG")
+        val streamEULER: Boolean get() = featuresToTrack.contains("EULER")
+        val streamQUATERNION: Boolean get() = featuresToTrack.contains("QUATERNION")
+        val streamFREE_ACCEL: Boolean get() = featuresToTrack.contains("FREE_ACCELERATION")
     }
 }
 
 enum class ActivityStatus {
-    SCHEDULED, IN_PROGRESS, COMPLETED
+    SCHEDULED, IN_PROGRESS, COMPLETED, STALE
 }

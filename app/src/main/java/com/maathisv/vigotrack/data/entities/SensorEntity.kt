@@ -15,5 +15,7 @@ data class SensorEntity(
     @PrimaryKey val deviceId: String,
     val address: String,
     val name: String,
-    val lastSeen: Long = System.currentTimeMillis()
+    val displayName: String? = null,
+    val lastSeen: Long = System.currentTimeMillis(),
+    val vendor: String = "polar"
 )

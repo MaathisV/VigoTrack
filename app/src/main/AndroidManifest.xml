@@ -30,7 +30,7 @@
         android:theme="@style/Theme.VigoTrack"
         tools:ignore="ForegroundServicePermission">
         <service
-            android:name=".services.PolarService"
+            android:name=".services.SensorService"
             android:foregroundServiceType="health"
             android:exported="false" />
         <activity

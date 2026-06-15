@@ -1,6 +1,11 @@
 package com.maathisv.vigotrack.data.dao
 
-import androidx.room.*
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import androidx.room.Transaction
+import androidx.room.Update
 import com.maathisv.vigotrack.data.ActivityWithLinks
 import com.maathisv.vigotrack.data.entities.ActivityLinkEntity
 import com.maathisv.vigotrack.data.entities.ActivitySessionEntity
@@ -20,9 +25,13 @@ interface ActivityDao {
     @Query("DELETE FROM activities WHERE id = :id")
     suspend fun deleteById(id: String)
 
-    @Transaction // Important: Room does 2 queries, so this ensures consistency
+    @Transaction
     @Query("SELECT * FROM activities")
     fun getActivitiesWithLinks(): Flow<List<ActivityWithLinks>>
+
+    @Transaction
+    @Query("SELECT * FROM activities WHERE stageId = :stageId ORDER BY scheduledDate ASC")
+    fun getActivitiesByStage(stageId: Long): Flow<List<ActivityWithLinks>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLink(toEntity: ActivityLinkEntity)
@@ -35,4 +44,7 @@ interface ActivityDao {
 
     @Query("DELETE FROM activity_links WHERE linkId = :linkId")
     suspend fun deleteLinkById(linkId: Long)
+
+    @Query("DELETE FROM activity_links WHERE parentActivityId = :activityId AND sensorId = :sensorId AND patientId IS :patientId")
+    suspend fun deleteLinkByActivityAndSensor(activityId: String, sensorId: String, patientId: Long?)
 }

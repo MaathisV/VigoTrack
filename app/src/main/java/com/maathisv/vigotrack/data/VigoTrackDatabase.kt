@@ -4,24 +4,36 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
-
-import com.maathisv.vigotrack.data.dao.*
-import com.maathisv.vigotrack.data.entities.*
+import com.maathisv.vigotrack.data.dao.ActivityDao
+import com.maathisv.vigotrack.data.dao.PatientDao
+import com.maathisv.vigotrack.data.dao.SensorDao
+import com.maathisv.vigotrack.data.dao.SensorPatientLinkDao
+import com.maathisv.vigotrack.data.dao.StageDao
+import com.maathisv.vigotrack.data.entities.ActivityLinkEntity
+import com.maathisv.vigotrack.data.entities.ActivitySessionEntity
+import com.maathisv.vigotrack.data.entities.PatientEntity
+import com.maathisv.vigotrack.data.entities.SensorEntity
+import com.maathisv.vigotrack.data.entities.SensorPatientLinkEntity
+import com.maathisv.vigotrack.data.entities.StageEntity
 
 @Database(
     entities = [
         SensorEntity::class,
         ActivitySessionEntity::class,
         ActivityLinkEntity::class,
-        PatientEntity::class
+        PatientEntity::class,
+        SensorPatientLinkEntity::class,
+        StageEntity::class
     ],
-    version = 4
+    version = 7
 )
 
 abstract class VigoTrackDatabase : RoomDatabase() {
     abstract fun sensorDao(): SensorDao
     abstract fun activityDao(): ActivityDao
     abstract fun patientDao(): PatientDao
+    abstract fun sensorPatientLinkDao(): SensorPatientLinkDao
+    abstract fun stageDao(): StageDao
 
     companion object {
         @Volatile

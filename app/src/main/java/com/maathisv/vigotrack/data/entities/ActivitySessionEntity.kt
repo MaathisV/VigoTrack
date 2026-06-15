@@ -1,7 +1,6 @@
 package com.maathisv.vigotrack.data.entities
 
 import androidx.room.Entity
-import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
@@ -10,7 +9,8 @@ import androidx.room.PrimaryKey
         Index(value = ["scheduledDate"]),
         Index(value = ["isRunning"]),
         Index(value = ["startTime"]),
-        Index(value = ["endTime"])
+        Index(value = ["endTime"]),
+        Index(value = ["stageId"])
     ]
 )
 data class ActivitySessionEntity(
@@ -19,5 +19,8 @@ data class ActivitySessionEntity(
     val scheduledDate: Long,
     val startTime: Long? = null,
     val endTime: Long? = null,
-    val isRunning: Boolean = false
+    val accumulatedTimeMs: Long = 0,
+    val isRunning: Boolean = false,
+    val stageId: Long? = null,
+    val isStale: Boolean = false
 )

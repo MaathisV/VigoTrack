@@ -6,20 +6,34 @@ import com.maathisv.vigotrack.data.PatientDataSource
 import com.maathisv.vigotrack.data.RoomActivityDataSource
 import com.maathisv.vigotrack.data.RoomPatientDataSource
 import com.maathisv.vigotrack.data.RoomSensorDataSource
+import com.maathisv.vigotrack.data.RoomSensorPatientLinkDataSource
+import com.maathisv.vigotrack.data.RoomStageDataSource
 import com.maathisv.vigotrack.data.SensorDataSource
+import com.maathisv.vigotrack.data.SensorPatientLinkDataSource
+import com.maathisv.vigotrack.data.StageDataSource
+import com.maathisv.vigotrack.data.VigoTrackDatabase
 import com.maathisv.vigotrack.repository.ActivityRepository
 import com.maathisv.vigotrack.repository.SensorRepository
-import com.maathisv.vigotrack.data.VigoTrackDatabase
+import com.maathisv.vigotrack.repository.VendorApiRegistry
+import com.maathisv.vigotrack.sensor.polar.PolarVendorApi
+import com.maathisv.vigotrack.sensor.xsens.XsensVendorApi
 
 class VigoTrackApplication : Application() {
     private val database by lazy {
         VigoTrackDatabase.getDatabase(this)
     }
-    // Room Datasource implementation
+
+    private val polarVendorApi by lazy { PolarVendorApi(this) }
+    private val xsensVendorApi by lazy { XsensVendorApi() }
+
+    private val vendorRegistry by lazy {
+        VendorApiRegistry(listOf(polarVendorApi, xsensVendorApi))
+    }
+
     private val sensorDataSource: SensorDataSource by lazy {
         RoomSensorDataSource(database.sensorDao())
     }
-    val sensorRepository by lazy { SensorRepository(this, sensorDataSource) }
+    val sensorRepository by lazy { SensorRepository(this, sensorDataSource, vendorRegistry) }
 
     private val activityDataSource: ActivityDataSource by lazy {
         RoomActivityDataSource(database.activityDao())
@@ -28,5 +42,13 @@ class VigoTrackApplication : Application() {
 
     val patientDataSource: PatientDataSource by lazy {
         RoomPatientDataSource(database.patientDao())
+    }
+
+    val sensorPatientLinkDataSource: SensorPatientLinkDataSource by lazy {
+        RoomSensorPatientLinkDataSource(database.sensorPatientLinkDao())
+    }
+
+    val stageDataSource: StageDataSource by lazy {
+        RoomStageDataSource(database.stageDao())
     }
 }

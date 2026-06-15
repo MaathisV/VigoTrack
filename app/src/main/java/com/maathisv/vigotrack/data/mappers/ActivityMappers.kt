@@ -13,7 +13,10 @@ fun ActivityWithLinks.toDomain(): ActivitySession {
         scheduledDate = activity.scheduledDate,
         startTime = activity.startTime,
         endTime = activity.endTime,
+        accumulatedTimeMs = activity.accumulatedTimeMs,
         isRunning = activity.isRunning,
+        stageId = activity.stageId,
+        isStale = activity.isStale,
         links = links.map { it.toDomain() }
     )
 }
@@ -34,7 +37,10 @@ fun ActivitySession.toEntity(): ActivitySessionEntity {
         scheduledDate = scheduledDate,
         startTime = startTime,
         endTime = endTime,
-        isRunning = isRunning
+        accumulatedTimeMs = accumulatedTimeMs,
+        isRunning = isRunning,
+        stageId = stageId,
+        isStale = isStale
     )
 }
 

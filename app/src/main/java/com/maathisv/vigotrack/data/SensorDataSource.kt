@@ -11,6 +11,7 @@ interface SensorDataSource {
     fun getSavedSensors(): Flow<List<Sensor>>
     suspend fun saveSensor(sensor: Sensor)
     suspend fun deleteSensor(deviceId: String)
+    suspend fun updateSensorName(deviceId: String, name: String)
 }
 
 // Implement the interface for Room usage
@@ -18,12 +19,14 @@ interface SensorDataSource {
 class RoomSensorDataSource(private val sensorDao: SensorDao) : SensorDataSource {
 
     override fun getSavedSensors(): Flow<List<Sensor>> {
-        return sensorDao.getAllSensors().map { entities ->
+        return         sensorDao.getAllSensors().map { entities ->
             entities.map { entity ->
                 Sensor(
                     deviceId = entity.deviceId,
                     address = entity.address,
-                    name = entity.name
+                    name = entity.name,
+                    displayName = entity.displayName,
+                    vendor = entity.vendor
                 )
             }
         }
@@ -34,12 +37,18 @@ class RoomSensorDataSource(private val sensorDao: SensorDao) : SensorDataSource 
             SensorEntity(
                 deviceId = sensor.deviceId,
                 address = sensor.address,
-                name = sensor.name
+                name = sensor.name,
+                displayName = sensor.displayName,
+                vendor = sensor.vendor
             )
         )
     }
 
     override suspend fun deleteSensor(deviceId: String) {
         sensorDao.deleteById(deviceId)
+    }
+
+    override suspend fun updateSensorName(deviceId: String, name: String) {
+        sensorDao.updateDisplayName(deviceId, name)
     }
 }

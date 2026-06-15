@@ -10,13 +10,16 @@ class ActivityRepository(private val dataSource: ActivityDataSource) {
     // Source of truth (Mapping happens inside the DataSource implementation)
     val allActivities = dataSource.getAllActivities()
 
+    fun getActivitiesByStage(stageId: Long) = dataSource.getActivitiesByStage(stageId)
+
     // 1. Create a fresh Activity (No links yet)
-    suspend fun createActivity(type: ActivityType, scheduledDate: Long) {
+    suspend fun createActivity(type: ActivityType, scheduledDate: Long, stageId: Long? = null, activityId: String? = null) {
         val newActivity = ActivitySession(
-            id = UUID.randomUUID().toString(),
+            id = activityId ?: UUID.randomUUID().toString(),
             activityType = type,
             scheduledDate = scheduledDate,
-            links = emptyList()
+            links = emptyList(),
+            stageId = stageId
         )
         dataSource.insertActivity(newActivity)
     }
@@ -30,15 +33,19 @@ class ActivityRepository(private val dataSource: ActivityDataSource) {
     suspend fun startActivity(activity: ActivitySession) {
         val startedActivity = activity.copy(
             startTime = System.currentTimeMillis(),
+            endTime = null,
             isRunning = true
         )
         dataSource.updateActivity(startedActivity)
     }
 
     suspend fun stopActivity(activity: ActivitySession) {
+        val now = System.currentTimeMillis()
+        val elapsedThisSegment = activity.startTime?.let { now - it } ?: 0L
         val stoppedActivity = activity.copy(
-            endTime = System.currentTimeMillis(),
-            isRunning = false
+            endTime = now,
+            isRunning = false,
+            accumulatedTimeMs = activity.accumulatedTimeMs + elapsedThisSegment
         )
         dataSource.updateActivity(stoppedActivity)
     }
@@ -46,5 +53,9 @@ class ActivityRepository(private val dataSource: ActivityDataSource) {
     // Add this so the ViewModel can push any state change
     suspend fun updateActivity(activity: ActivitySession) {
         dataSource.updateActivity(activity)
+    }
+
+    suspend fun removeLinkFromActivity(activityId: String, sensorId: String, patientId: Long?) {
+        dataSource.deleteLink(activityId, sensorId, patientId)
     }
 }

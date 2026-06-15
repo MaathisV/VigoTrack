@@ -21,4 +21,7 @@ interface SensorDao {
 
     @Query("DELETE FROM sensors WHERE deviceId = :deviceId")
     suspend fun deleteById(deviceId: String)
+
+    @Query("UPDATE sensors SET displayName = :name WHERE deviceId = :deviceId")
+    suspend fun updateDisplayName(deviceId: String, name: String)
 }
