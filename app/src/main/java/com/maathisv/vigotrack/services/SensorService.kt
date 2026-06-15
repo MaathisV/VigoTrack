@@ -126,7 +126,7 @@ class SensorService : LifecycleService() {
         return NotificationCompat.Builder(this, channelId)
             .setContentTitle("VigoTrack Actif")
             .setContentText("Surveillance des capteurs en arrière-plan…")
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.vigotrack_icon_foreground)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
