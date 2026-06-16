@@ -57,7 +57,7 @@ private fun formatDuration(startTime: Long?, endTime: Long?, isRunning: Boolean)
 
 
 @Composable
-fun ActivityCard(session: ActivitySession, onClick: () -> Unit, onMarkStale: (String) -> Unit = {}) {
+fun ActivityCard(session: ActivitySession, onClick: () -> Unit, onMarkStale: (String) -> Unit = {}, onUnmarkStale: (String) -> Unit = {}) {
     val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
     val patientNames = session.links.map { it.patientName }
     var showMenu by remember { mutableStateOf(false) }
@@ -155,14 +155,17 @@ fun ActivityCard(session: ActivitySession, onClick: () -> Unit, onMarkStale: (St
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false }
                 ) {
-                    DropdownMenuItem(
-                        text = { Text(if (session.isStale) "Déjà invalidé" else "Invalider") },
-                        onClick = {
-                            showMenu = false
-                            if (!session.isStale) onMarkStale(session.id)
-                        },
-                        enabled = !session.isStale
-                    )
+                    if (session.isStale) {
+                        DropdownMenuItem(
+                            text = { Text("Annuler l'invalidation") },
+                            onClick = { showMenu = false; onUnmarkStale(session.id) }
+                        )
+                    } else {
+                        DropdownMenuItem(
+                            text = { Text("Invalider") },
+                            onClick = { showMenu = false; onMarkStale(session.id) }
+                        )
+                    }
                 }
             }
             Spacer(modifier = Modifier.width(4.dp))

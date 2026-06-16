@@ -14,6 +14,7 @@ import com.polar.sdk.api.errors.PolarDeviceNotFound
 import com.polar.sdk.api.model.PolarDeviceInfo
 import com.polar.sdk.api.model.PolarHealthThermometerData
 import com.polar.sdk.api.model.PolarSensorSetting
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -224,6 +225,8 @@ class PolarVendorApi(
                         .catch { e -> Log.e("PolarVendorApi", "ACC stream fail", e) }
                         .collect()
                     break
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: PolarDeviceNotFound) {
                     retries++; if (retries < 3) delay(2000) else Log.e("PolarVendorApi", "ACC failed", e)
                 } catch (e: Exception) {
@@ -247,6 +250,8 @@ class PolarVendorApi(
                         .catch { e -> Log.e("PolarVendorApi", "ECG stream fail", e) }
                         .collect()
                     break
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: PolarDeviceNotFound) {
                     retries++; if (retries < 3) delay(2000) else Log.e("PolarVendorApi", "ECG failed", e)
                 } catch (e: Exception) {

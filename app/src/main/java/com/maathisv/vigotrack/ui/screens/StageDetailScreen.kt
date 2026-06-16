@@ -104,7 +104,8 @@ fun StageDetailScreen(
                     homeViewModel.createActivityInStage(newId, stage.id, ActivityType.MARCHE)
                     onActivityClick(newId)
                 },
-                onMarkStale = { activityId -> homeViewModel.markActivityAsStale(activityId) }
+                onMarkStale = { activityId -> homeViewModel.markActivityAsStale(activityId) },
+                onUnmarkStale = { activityId -> homeViewModel.unmarkActivityAsStale(activityId) }
             )
         }
     }
@@ -151,7 +152,8 @@ private fun StageDetailContent(
     onBilanClick: () -> Unit,
     onActivityClick: (String) -> Unit,
     onRecordClick: () -> Unit,
-    onMarkStale: (String) -> Unit = {}
+    onMarkStale: (String) -> Unit = {},
+    onUnmarkStale: (String) -> Unit = {}
 ) {
     val dateFormat = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()) }
     val dayFormat = remember { SimpleDateFormat("EEEE dd MMMM", Locale.getDefault()) }
@@ -208,7 +210,7 @@ private fun StageDetailContent(
                     )
                 }
                 items(dayActivities, key = { it.id }) { session ->
-                    ActivityCard(session = session, onClick = { onActivityClick(session.id) }, onMarkStale = onMarkStale)
+                    ActivityCard(session = session, onClick = { onActivityClick(session.id) }, onMarkStale = onMarkStale, onUnmarkStale = onUnmarkStale)
                 }
             }
         }

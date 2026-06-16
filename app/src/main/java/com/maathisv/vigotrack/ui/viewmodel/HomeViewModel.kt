@@ -3,7 +3,6 @@ package com.maathisv.vigotrack.ui.viewmodel
 import android.app.Application
 import android.content.Intent
 import android.util.Log
-import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.maathisv.vigotrack.data.PatientDataSource
@@ -19,15 +18,16 @@ import com.maathisv.vigotrack.repository.ActivityRepository
 import com.maathisv.vigotrack.repository.SensorRepository
 import com.maathisv.vigotrack.services.ACTION_START_STREAMS
 import com.maathisv.vigotrack.services.ACTION_STOP_STREAMS
-import com.maathisv.vigotrack.services.DEFAULT_TEMPLATE
 import com.maathisv.vigotrack.services.EXTRA_ACTIVITY_CATEGORY
+import com.maathisv.vigotrack.services.EXTRA_ACTIVITY_ID
 import com.maathisv.vigotrack.services.EXTRA_ACTIVITY_NAME
 import com.maathisv.vigotrack.services.EXTRA_PATIENT_NAMES
 import com.maathisv.vigotrack.services.EXTRA_SENSOR_IDS
 import com.maathisv.vigotrack.services.EXTRA_SESSION_DATE
 import com.maathisv.vigotrack.services.EXTRA_STAGE_NAME
-import com.maathisv.vigotrack.services.EXTRA_ACTIVITY_ID
 import com.maathisv.vigotrack.services.SensorService
+import com.maathisv.vigotrack.util.PreferencesManager
+import com.maathisv.vigotrack.util.toggleActivityExportMarker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -49,6 +49,8 @@ class HomeViewModel(
     private val stageDataSource: StageDataSource,
     private val sensorPatientLinkDataSource: SensorPatientLinkDataSource
 ) : AndroidViewModel(application) {
+
+    private val prefsManager = PreferencesManager(application)
 
     val connectionState = sensorRepo.connectionState
     val deviceConnectionStates = sensorRepo.deviceConnectionStates
@@ -94,16 +96,16 @@ class HomeViewModel(
         }
     }
 
-    private val _currentLogUri = MutableStateFlow(getSavedLogUri())
+    private val _currentLogUri = MutableStateFlow(prefsManager.logUri)
     val currentLogUri: StateFlow<String> = _currentLogUri.asStateFlow()
 
-    private val _namingTemplate = MutableStateFlow(getFileNamingTemplate())
+    private val _namingTemplate = MutableStateFlow(prefsManager.fileNamingTemplate)
     val namingTemplate: StateFlow<String> = _namingTemplate.asStateFlow()
 
-    private val _showFeatures = MutableStateFlow(getFeatureSettings("show"))
+    private val _showFeatures = MutableStateFlow(prefsManager.getAllShowFeatures())
     val showFeatures: StateFlow<Map<String, Boolean>> = _showFeatures.asStateFlow()
 
-    private val _logFeatures = MutableStateFlow(getFeatureSettings("log"))
+    private val _logFeatures = MutableStateFlow(prefsManager.getAllLogFeatures())
     val logFeatures: StateFlow<Map<String, Boolean>> = _logFeatures.asStateFlow()
 
     private fun getFeatureSettings(prefix: String): Map<String, Boolean> {
@@ -124,52 +126,31 @@ class HomeViewModel(
         val current = _showFeatures.value.toMutableMap()
         current[feature] = !(current[feature] ?: true)
         _showFeatures.value = current
-        getApplication<Application>()
-            .getSharedPreferences("vigo_prefs", Application.MODE_PRIVATE)
-            .edit { putBoolean("show_$feature", current[feature] ?: true) }
+        prefsManager.setShowFeature(feature, current[feature] ?: true)
     }
 
     fun toggleLogFeature(feature: String) {
         val current = _logFeatures.value.toMutableMap()
         current[feature] = !(current[feature] ?: true)
         _logFeatures.value = current
-        getApplication<Application>()
-            .getSharedPreferences("vigo_prefs", Application.MODE_PRIVATE)
-            .edit { putBoolean("log_$feature", current[feature] ?: true) }
+        prefsManager.setLogFeature(feature, current[feature] ?: true)
     }
 
-    private fun getActiveFeatures(): Set<String> {
-        return (_showFeatures.value.filter { it.value }.keys + _logFeatures.value.filter { it.value }.keys)
-    }
-
-    private fun getSavedLogUri(): String {
-        return getApplication<Application>()
-            .getSharedPreferences("vigo_prefs", Application.MODE_PRIVATE)
-            .getString("log_uri", "") ?: ""
-    }
-
-    private fun getFileNamingTemplate(): String {
-        return getApplication<Application>()
-            .getSharedPreferences("vigo_prefs", Application.MODE_PRIVATE)
-            .getString("file_naming_template", DEFAULT_TEMPLATE) ?: DEFAULT_TEMPLATE
-    }
+    private fun getActiveFeatures(): Set<String> = prefsManager.getActiveFeatures()
 
     fun updateLogUri(uri: String) {
-        getApplication<Application>()
-            .getSharedPreferences("vigo_prefs", Application.MODE_PRIVATE)
-            .edit { putString("log_uri", uri) }
+        prefsManager.logUri = uri
         _currentLogUri.value = uri
     }
 
     fun updateNamingTemplate(template: String) {
-        getApplication<Application>()
-            .getSharedPreferences("vigo_prefs", Application.MODE_PRIVATE)
-            .edit { putString("file_naming_template", template) }
+        prefsManager.fileNamingTemplate = template
         _namingTemplate.value = template
     }
 
     fun resetNamingTemplate() {
-        updateNamingTemplate(DEFAULT_TEMPLATE)
+        prefsManager.resetNamingTemplate()
+        _namingTemplate.value = prefsManager.fileNamingTemplate
     }
 
     fun startScanning() {
@@ -268,7 +249,6 @@ class HomeViewModel(
 
     fun toggleSession(activity: ActivitySession, checkedKeys: Set<String> = emptySet()) {
         viewModelScope.launch {
-            // Use getApplication() here!
             val intent = Intent(getApplication(), SensorService::class.java)
 
             if (activity.isRunning) {
@@ -417,37 +397,6 @@ class HomeViewModel(
         }
     }
 
-    fun resumeActivity(activity: ActivitySession) {
-        viewModelScope.launch {
-            val resumed = activity.copy(startTime = System.currentTimeMillis(), endTime = null, isRunning = true)
-            activityRepo.updateActivity(resumed)
-            val activeFeatures = getActiveFeatures()
-            val filtered = resumed.copy(
-                links = resumed.links.map { link ->
-                    link.copy(featuresToTrack = link.featuresToTrack.filter { it in activeFeatures })
-                }
-            )
-            sensorRepo.startActivityStreaming(filtered)
-
-            val sensorIds = resumed.links.map { it.sensorId }.toTypedArray()
-            val patientNames = resumed.links.map { it.patientName }.toTypedArray()
-            val stageName = resumed.stageId?.let { id ->
-                stages.value.find { it.id == id }?.name
-            } ?: "NoStage"
-            val intent = Intent(getApplication(), SensorService::class.java).apply {
-                action = ACTION_START_STREAMS
-                putExtra(EXTRA_SENSOR_IDS, sensorIds)
-                putExtra(EXTRA_PATIENT_NAMES, patientNames)
-                putExtra(EXTRA_ACTIVITY_NAME, resumed.activityType.displayName)
-                putExtra(EXTRA_ACTIVITY_CATEGORY, resumed.activityType.category.name)
-                putExtra(EXTRA_ACTIVITY_ID, resumed.id)
-                putExtra(EXTRA_STAGE_NAME, stageName)
-                putExtra(EXTRA_SESSION_DATE, System.currentTimeMillis())
-            }
-            getApplication<Application>().startService(intent)
-        }
-    }
-
     fun stopPatientStream(sensorId: String) {
         viewModelScope.launch {
             sensorRepo.stopActivityStreaming(sensorId)
@@ -459,6 +408,8 @@ class HomeViewModel(
             val activities = activityRepo.allActivities.first()
             val activity = activities.find { it.id == activityId } ?: return@launch
             activityRepo.updateActivity(activity.copy(isStale = true))
+            val stageName = stages.value.find { it.id == activity.stageId }?.name ?: "NoStage"
+            toggleActivityExportMarker(application, _currentLogUri.value, _namingTemplate.value, stageName, activity, create = true)
         }
     }
 
@@ -467,6 +418,8 @@ class HomeViewModel(
             val activities = activityRepo.allActivities.first()
             val activity = activities.find { it.id == activityId } ?: return@launch
             activityRepo.updateActivity(activity.copy(isStale = false))
+            val stageName = stages.value.find { it.id == activity.stageId }?.name ?: "NoStage"
+            toggleActivityExportMarker(application, _currentLogUri.value, _namingTemplate.value, stageName, activity, create = false)
         }
     }
 }
