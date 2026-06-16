@@ -26,6 +26,7 @@ import com.maathisv.vigotrack.services.EXTRA_PATIENT_NAMES
 import com.maathisv.vigotrack.services.EXTRA_SENSOR_IDS
 import com.maathisv.vigotrack.services.EXTRA_SESSION_DATE
 import com.maathisv.vigotrack.services.EXTRA_STAGE_NAME
+import com.maathisv.vigotrack.services.EXTRA_ACTIVITY_ID
 import com.maathisv.vigotrack.services.SensorService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -334,6 +335,7 @@ class HomeViewModel(
                     putExtra(EXTRA_PATIENT_NAMES, patientNames)
                     putExtra(EXTRA_ACTIVITY_NAME, activity.activityType.displayName)
                     putExtra(EXTRA_ACTIVITY_CATEGORY, activity.activityType.category.name)
+                    putExtra(EXTRA_ACTIVITY_ID, activity.id)
                     putExtra(EXTRA_STAGE_NAME, stageName)
                     putExtra(EXTRA_SESSION_DATE, System.currentTimeMillis())
                 }
@@ -438,6 +440,7 @@ class HomeViewModel(
                 putExtra(EXTRA_PATIENT_NAMES, patientNames)
                 putExtra(EXTRA_ACTIVITY_NAME, resumed.activityType.displayName)
                 putExtra(EXTRA_ACTIVITY_CATEGORY, resumed.activityType.category.name)
+                putExtra(EXTRA_ACTIVITY_ID, resumed.id)
                 putExtra(EXTRA_STAGE_NAME, stageName)
                 putExtra(EXTRA_SESSION_DATE, System.currentTimeMillis())
             }
