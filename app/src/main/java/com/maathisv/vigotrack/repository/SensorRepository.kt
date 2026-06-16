@@ -378,8 +378,6 @@ class SensorRepository(
         return _availableStreamDataTypes.value[deviceId] ?: emptySet()
     }
 
-    suspend fun getSupportedSettings(deviceId: String, feature: String): Any? = null
-
     fun startFeatureStream(deviceId: String, feature: String, settings: Any? = null) {
         val available = _availableStreamDataTypes.value[deviceId] ?: emptySet()
         if (feature !in available) {

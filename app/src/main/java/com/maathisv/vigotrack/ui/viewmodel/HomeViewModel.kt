@@ -90,12 +90,6 @@ class HomeViewModel(
         return sensorRepo.getAvailableFeaturesForDevice(deviceId)
     }
 
-    fun getSupportedSettings(deviceId: String, feature: String) {
-        viewModelScope.launch {
-            sensorRepo.getSupportedSettings(deviceId, feature)
-        }
-    }
-
     private val _currentLogUri = MutableStateFlow(prefsManager.logUri)
     val currentLogUri: StateFlow<String> = _currentLogUri.asStateFlow()
 
@@ -107,20 +101,6 @@ class HomeViewModel(
 
     private val _logFeatures = MutableStateFlow(prefsManager.getAllLogFeatures())
     val logFeatures: StateFlow<Map<String, Boolean>> = _logFeatures.asStateFlow()
-
-    private fun getFeatureSettings(prefix: String): Map<String, Boolean> {
-        val prefs = getApplication<Application>()
-            .getSharedPreferences("vigo_prefs", Application.MODE_PRIVATE)
-        return mapOf(
-            "HR" to prefs.getBoolean("${prefix}_HR", true),
-            "PPI" to prefs.getBoolean("${prefix}_PPI", true),
-            "ACC" to prefs.getBoolean("${prefix}_ACC", true),
-            "ECG" to prefs.getBoolean("${prefix}_ECG", true),
-            "EULER" to prefs.getBoolean("${prefix}_EULER", true),
-            "QUATERNION" to prefs.getBoolean("${prefix}_QUATERNION", true),
-            "FREE_ACCELERATION" to prefs.getBoolean("${prefix}_FREE_ACCELERATION", true)
-        )
-    }
 
     fun toggleShowFeature(feature: String) {
         val current = _showFeatures.value.toMutableMap()
