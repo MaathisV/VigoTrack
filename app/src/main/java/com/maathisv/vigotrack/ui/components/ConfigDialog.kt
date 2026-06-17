@@ -30,6 +30,9 @@ fun ConfigDialog(
     namingTemplate: String,
     showFeatures: Map<String, Boolean>,
     logFeatures: Map<String, Boolean>,
+    availableSettings: Map<String, Map<String, Set<Int>>> = emptyMap(),
+    selectedSettings: Map<String, Pair<Int, Int>> = emptyMap(),
+    deviceAvailableDataTypes: Map<String, Set<String>> = emptyMap(),
     onDismiss: () -> Unit,
     onConnect: (Sensor) -> Unit,
     onDisconnect: (String) -> Unit,
@@ -42,7 +45,9 @@ fun ConfigDialog(
     onCreateSensorPatientLink: (Long?, String, List<String>) -> Unit,
     onDeleteSensorPatientLink: (SensorPatientLink) -> Unit,
     onToggleShowFeature: (String) -> Unit,
-    onToggleLogFeature: (String) -> Unit
+    onToggleLogFeature: (String) -> Unit,
+    onSensorSettingsChanged: (String, String, Int, Int) -> Unit = { _, _, _, _ -> },
+    onQuerySettings: (String) -> Unit = {}
 ) {
     var selectedTab by remember { mutableStateOf(0) }
 
@@ -81,7 +86,12 @@ fun ConfigDialog(
                     connectingId = connectingId,
                     onConnect = onConnect,
                     onDisconnect = onDisconnect,
-                    onRenameSensor = onRenameSensor
+                    onRenameSensor = onRenameSensor,
+                    availableSettings = availableSettings,
+                    selectedSettings = selectedSettings,
+                    deviceAvailableDataTypes = deviceAvailableDataTypes,
+                    onSensorSettingsChanged = onSensorSettingsChanged,
+                    onQuerySettings = onQuerySettings
                 )
                 1 -> ConfigLinksTab(
                     connectedDevicesList = connectedDevicesList,

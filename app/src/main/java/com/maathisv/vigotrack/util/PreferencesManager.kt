@@ -39,6 +39,20 @@ class PreferencesManager(context: Context) {
         return FEATURES.filter { isShowFeatureEnabled(it) || isLogFeatureEnabled(it) }.toSet()
     }
 
+    fun getSampleRate(deviceId: String, feature: String): Int =
+        prefs.getInt("${deviceId}_${feature}_sample_rate", 0)
+
+    fun setSampleRate(deviceId: String, feature: String, rate: Int) {
+        prefs.edit { putInt("${deviceId}_${feature}_sample_rate", rate) }
+    }
+
+    fun getResolution(deviceId: String, feature: String): Int =
+        prefs.getInt("${deviceId}_${feature}_resolution", 0)
+
+    fun setResolution(deviceId: String, feature: String, resolution: Int) {
+        prefs.edit { putInt("${deviceId}_${feature}_resolution", resolution) }
+    }
+
     companion object {
         private val FEATURES = listOf("HR", "PPI", "ACC", "ECG", "EULER", "QUATERNION", "FREE_ACCELERATION")
     }

@@ -160,6 +160,19 @@ class PolarVendorApi(
         return SensorDataType.entries.filter { it.toPolarDeviceDataType() != null }.toSet()
     }
 
+    override suspend fun getAvailableSettings(deviceId: String, dataType: SensorDataType): Map<String, Set<Int>>? {
+        val polarDataType = dataType.toPolarDeviceDataType() ?: return null
+        return try {
+            api.requestStreamSettings(deviceId, polarDataType)
+                .settings
+                .mapKeys { it.key.name }
+                .mapValues { it.value }
+        } catch (e: Exception) {
+            Log.w("PolarVendorApi", "Failed to get settings for $deviceId $dataType", e)
+            null
+        }
+    }
+
     override fun startStreaming(deviceId: String, dataType: SensorDataType, settings: Any?) {
         if (activeStreamJobs.containsKey(deviceId to dataType)) return
 

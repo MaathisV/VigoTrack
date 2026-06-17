@@ -8,6 +8,7 @@ interface VendorApi {
     suspend fun connectToDevice(deviceId: String)
     fun disconnectFromDevice(deviceId: String)
     fun getAvailableDataTypes(deviceId: String): Set<SensorDataType>
+    suspend fun getAvailableSettings(deviceId: String, dataType: SensorDataType): Map<String, Set<Int>>?
     fun startStreaming(deviceId: String, dataType: SensorDataType, settings: Any? = null)
     fun stopStreaming(deviceId: String, dataType: SensorDataType)
     val events: Flow<SensorEvent>

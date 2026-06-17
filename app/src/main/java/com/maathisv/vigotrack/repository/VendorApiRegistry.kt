@@ -33,6 +33,9 @@ class VendorApiRegistry(
     fun getAvailableDataTypes(deviceId: String, vendorName: String): Set<SensorDataType> =
         findByVendorName(vendorName)?.getAvailableDataTypes(deviceId) ?: emptySet()
 
+    suspend fun getAvailableSettings(deviceId: String, vendorName: String, dataType: SensorDataType): Map<String, Set<Int>>? =
+        findByVendorName(vendorName)?.getAvailableSettings(deviceId, dataType)
+
     fun startStreaming(deviceId: String, vendorName: String, dataType: SensorDataType, settings: Any? = null) {
         findByVendorName(vendorName)?.startStreaming(deviceId, dataType, settings)
     }

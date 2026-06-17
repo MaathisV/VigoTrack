@@ -55,6 +55,8 @@ class XsensVendorApi : VendorApi {
         // TODO: XsensDotConnectionManager.disconnect(deviceId)
     }
 
+    override suspend fun getAvailableSettings(deviceId: String, dataType: SensorDataType): Map<String, Set<Int>>? = null
+
     override fun getAvailableDataTypes(deviceId: String): Set<SensorDataType> {
         // All Xsens Dot devices support Euler, quaternion, and free acceleration
         return setOf(SensorDataType.EULER, SensorDataType.QUATERNION, SensorDataType.FREE_ACCELERATION)

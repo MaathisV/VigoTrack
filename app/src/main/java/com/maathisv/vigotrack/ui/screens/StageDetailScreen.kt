@@ -113,6 +113,9 @@ fun StageDetailScreen(
     if (showConfigDialog) {
         val showFeatures by homeViewModel.showFeatures.collectAsState()
         val logFeatures by homeViewModel.logFeatures.collectAsState()
+        val availableSettings by homeViewModel.availableSettings.collectAsState()
+        val selectedSettings by homeViewModel.selectedSettings.collectAsState()
+        val deviceDataTypes by homeViewModel.deviceAvailableDataTypes.collectAsState()
         ConfigDialog(
             scannedDevices = scannedDevices,
             connectedDevicesList = connectedDevicesList,
@@ -124,6 +127,9 @@ fun StageDetailScreen(
             namingTemplate = namingTemplate,
             showFeatures = showFeatures,
             logFeatures = logFeatures,
+            availableSettings = availableSettings,
+            selectedSettings = selectedSettings,
+            deviceAvailableDataTypes = deviceDataTypes,
             onDismiss = { showConfigDialog = false },
             onConnect = { sensor -> homeViewModel.connectToDevice(sensor) },
             onDisconnect = { id -> homeViewModel.disconnectFromDevice(id) },
@@ -140,7 +146,11 @@ fun StageDetailScreen(
                 homeViewModel.deleteSensorPatientLink(link)
             },
             onToggleShowFeature = { feature -> homeViewModel.toggleShowFeature(feature) },
-            onToggleLogFeature = { feature -> homeViewModel.toggleLogFeature(feature) }
+            onToggleLogFeature = { feature -> homeViewModel.toggleLogFeature(feature) },
+            onSensorSettingsChanged = { deviceId, feature, rate, resolution ->
+                homeViewModel.setSensorSettings(deviceId, feature, rate, resolution)
+            },
+            onQuerySettings = { deviceId -> homeViewModel.queryAvailableSettings(deviceId) }
         )
     }
 }

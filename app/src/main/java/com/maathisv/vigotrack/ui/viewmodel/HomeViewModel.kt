@@ -28,7 +28,9 @@ import com.maathisv.vigotrack.services.EXTRA_STAGE_NAME
 import com.maathisv.vigotrack.services.SensorService
 import com.maathisv.vigotrack.util.PreferencesManager
 import com.maathisv.vigotrack.util.toggleActivityExportMarker
+import com.polar.sdk.api.model.PolarSensorSetting
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -85,6 +87,43 @@ class HomeViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val deviceAvailableDataTypes = sensorRepo.availableStreamDataTypes
+
+    private val _availableSettings = MutableStateFlow<Map<String, Map<String, Set<Int>>>>(emptyMap())
+    val availableSettings: StateFlow<Map<String, Map<String, Set<Int>>>> = _availableSettings.asStateFlow()
+
+    private val _selectedSettings = MutableStateFlow<Map<String, Pair<Int, Int>>>(emptyMap())
+    val selectedSettings: StateFlow<Map<String, Pair<Int, Int>>> = _selectedSettings.asStateFlow()
+
+    fun queryAvailableSettings(deviceId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val supported = deviceAvailableDataTypes.value[deviceId] ?: emptySet()
+            listOf("ACC", "ECG").filter { it in supported }.forEach { feature ->
+                val result = sensorRepo.getAvailableSettings(deviceId, feature)
+                if (result != null) {
+                    _availableSettings.value = _availableSettings.value + ("$deviceId:$feature" to result)
+                    _selectedSettings.value = _selectedSettings.value + ("$deviceId:$feature" to (
+                        prefsManager.getSampleRate(deviceId, feature) to prefsManager.getResolution(deviceId, feature)
+                    ))
+                }
+            }
+        }
+    }
+
+    fun setSensorSettings(deviceId: String, feature: String, sampleRate: Int, resolution: Int) {
+        prefsManager.setSampleRate(deviceId, feature, sampleRate)
+        prefsManager.setResolution(deviceId, feature, resolution)
+        _selectedSettings.value = _selectedSettings.value + ("$deviceId:$feature" to (sampleRate to resolution))
+    }
+
+    private fun buildSensorSettings(deviceId: String, feature: String): Any? {
+        val sampleRate = prefsManager.getSampleRate(deviceId, feature)
+        val resolution = prefsManager.getResolution(deviceId, feature)
+        if (sampleRate == 0 && resolution == 0) return null
+        val map = mutableMapOf<PolarSensorSetting.SettingType, Int>()
+        if (sampleRate > 0) map[PolarSensorSetting.SettingType.SAMPLE_RATE] = sampleRate
+        if (resolution > 0) map[PolarSensorSetting.SettingType.RESOLUTION] = resolution
+        return PolarSensorSetting(map)
+    }
 
     fun getAvailableFeaturesForDevice(deviceId: String): Set<String> {
         return sensorRepo.getAvailableFeaturesForDevice(deviceId)
@@ -282,7 +321,13 @@ class HomeViewModel(
                         link.copy(featuresToTrack = link.featuresToTrack.filter { it in activeFeatures })
                     }
                 )
-                sensorRepo.startActivityStreaming(updatedActivity)
+                updatedActivity.links.forEach { link ->
+                    link.featuresToTrack.forEach { feature ->
+                        val settings = buildSensorSettings(link.sensorId, feature)
+                        sensorRepo.startFeatureStream(link.sensorId, feature, settings)
+                        delay(300)
+                    }
+                }
 
                 val sensorIds = allActiveLinks.map { it.sensorId }.toTypedArray()
                 val patientNames = allActiveLinks.map { it.patientName }.toTypedArray()
@@ -372,7 +417,8 @@ class HomeViewModel(
         viewModelScope.launch {
             val activeFeatures = getActiveFeatures()
             features.filter { it in activeFeatures }.forEach { feature ->
-                sensorRepo.startFeatureStream(sensorId, feature)
+                val settings = buildSensorSettings(sensorId, feature)
+                sensorRepo.startFeatureStream(sensorId, feature, settings)
             }
         }
     }

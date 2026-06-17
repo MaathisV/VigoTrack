@@ -378,6 +378,12 @@ class SensorRepository(
         return _availableStreamDataTypes.value[deviceId] ?: emptySet()
     }
 
+    suspend fun getAvailableSettings(deviceId: String, feature: String): Map<String, Set<Int>>? {
+        val vendor = getVendorForDevice(deviceId) ?: return null
+        val dataType = try { SensorDataType.valueOf(feature) } catch (_: IllegalArgumentException) { return null }
+        return vendorRegistry.getAvailableSettings(deviceId, vendor, dataType)
+    }
+
     fun startFeatureStream(deviceId: String, feature: String, settings: Any? = null) {
         val available = _availableStreamDataTypes.value[deviceId] ?: emptySet()
         if (feature !in available) {
