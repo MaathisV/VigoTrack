@@ -63,16 +63,11 @@ fun ConfigDialog(
                 Tab(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
-                    text = { Text("Liens") }
+                    text = { Text("Patients") }
                 )
                 Tab(
                     selected = selectedTab == 2,
                     onClick = { selectedTab = 2 },
-                    text = { Text("Patients") }
-                )
-                Tab(
-                    selected = selectedTab == 3,
-                    onClick = { selectedTab = 3 },
                     text = { Text("Paramètres") }
                 )
             }
@@ -93,19 +88,17 @@ fun ConfigDialog(
                     onSensorSettingsChanged = onSensorSettingsChanged,
                     onQuerySettings = onQuerySettings
                 )
-                1 -> ConfigLinksTab(
-                    connectedDevicesList = connectedDevicesList,
+                1 -> ConfigPatientTab(
                     patients = patients,
+                    connectedDevicesList = connectedDevicesList,
+                    deviceAvailableDataTypes = deviceAvailableDataTypes,
                     sensorPatientLinks = sensorPatientLinks,
-                    onAddLink = onCreateSensorPatientLink,
+                    onAddPatient = onAddPatient,
+                    onDeletePatient = onDeletePatient,
+                    onCreateLink = onCreateSensorPatientLink,
                     onDeleteLink = onDeleteSensorPatientLink
                 )
-                2 -> ConfigPatientTab(
-                    patients = patients,
-                    onAddPatient = onAddPatient,
-                    onDeletePatient = onDeletePatient
-                )
-                3 -> ConfigSettingsTab(
+                2 -> ConfigSettingsTab(
                     currentLogUri = currentLogUri,
                     namingTemplate = namingTemplate,
                     showFeatures = showFeatures,

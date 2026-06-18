@@ -357,6 +357,8 @@ class HomeViewModel(
 
     fun deletePatient(patient: Patient) {
         viewModelScope.launch(Dispatchers.IO) {
+            sensorPatientLinks.value.filter { it.patientId == patient.id }
+                .forEach { sensorPatientLinkDataSource.deleteLink(it) }
             patientDataSource.deletePatient(patient)
         }
     }
