@@ -58,4 +58,8 @@ class ActivityRepository(private val dataSource: ActivityDataSource) {
     suspend fun removeLinkFromActivity(activityId: String, sensorId: String, patientId: Long?) {
         dataSource.deleteLink(activityId, sensorId, patientId)
     }
+
+    suspend fun deleteActivitiesByStage(stageId: Long) {
+        dataSource.deleteActivitiesByStage(stageId)
+    }
 }

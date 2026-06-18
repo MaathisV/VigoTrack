@@ -24,26 +24,29 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.maathisv.vigotrack.models.Stage
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CreateStageDialog(
+fun StageDialog(
+    initialStage: Stage? = null,
     onDismiss: () -> Unit,
     onConfirm: (String, Long, Long) -> Unit
 ) {
-    var name by remember { mutableStateOf("") }
-    var startDate by remember { mutableStateOf(System.currentTimeMillis()) }
-    var endDate by remember { mutableStateOf(System.currentTimeMillis() + 7 * 24 * 60 * 60 * 1000L) }
+    val isEditing = initialStage != null
+    var name by remember { mutableStateOf(initialStage?.name ?: "") }
+    var startDate by remember { mutableStateOf(initialStage?.startDate ?: System.currentTimeMillis()) }
+    var endDate by remember { mutableStateOf(initialStage?.endDate ?: System.currentTimeMillis() + 7 * 24 * 60 * 60 * 1000L) }
     var showStartPicker by remember { mutableStateOf(false) }
     var showEndPicker by remember { mutableStateOf(false) }
     val dateFormat = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Nouveau Stage") },
+        title = { Text(if (isEditing) "Modifier le Stage" else "Nouveau Stage") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
@@ -91,7 +94,7 @@ fun CreateStageDialog(
             Button(
                 onClick = { onConfirm(name, startDate, endDate) },
                 enabled = name.isNotBlank()
-            ) { Text("Créer") }
+            ) { Text(if (isEditing) "Modifier" else "Créer") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Annuler") }

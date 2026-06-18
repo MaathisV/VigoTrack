@@ -390,6 +390,19 @@ class HomeViewModel(
         }
     }
 
+    fun updateStage(stage: Stage) {
+        viewModelScope.launch(Dispatchers.IO) {
+            stageDataSource.updateStage(stage)
+        }
+    }
+
+    fun deleteStage(stage: Stage) {
+        viewModelScope.launch(Dispatchers.IO) {
+            activityRepo.deleteActivitiesByStage(stage.id)
+            stageDataSource.deleteStage(stage)
+        }
+    }
+
     fun updateActivityType(activity: ActivitySession, newType: ActivityType) {
         viewModelScope.launch(Dispatchers.IO) {
             activityRepo.updateActivity(activity.copy(activityType = newType))

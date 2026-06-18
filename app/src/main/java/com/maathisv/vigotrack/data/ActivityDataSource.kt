@@ -15,6 +15,7 @@ interface ActivityDataSource {
     suspend fun deleteActivity(id: String)
     suspend fun insertLink(activityId: String, link: ActivitySession.ActivityLink)
     suspend fun deleteLink(activityId: String, sensorId: String, patientId: Long?)
+    suspend fun deleteActivitiesByStage(stageId: Long)
 }
 
 class RoomActivityDataSource(private val dao: ActivityDao) : ActivityDataSource {
@@ -46,4 +47,6 @@ class RoomActivityDataSource(private val dao: ActivityDao) : ActivityDataSource 
     override suspend fun deleteLink(activityId: String, sensorId: String, patientId: Long?) {
         dao.deleteLinkByActivityAndSensor(activityId, sensorId, patientId)
     }
+
+    override suspend fun deleteActivitiesByStage(stageId: Long) = dao.deleteActivitiesByStage(stageId)
 }
