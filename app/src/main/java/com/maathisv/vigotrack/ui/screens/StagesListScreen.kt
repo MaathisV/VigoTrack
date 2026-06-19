@@ -48,6 +48,8 @@ import com.maathisv.vigotrack.models.Stage
 import com.maathisv.vigotrack.ui.components.AppTopBar
 import com.maathisv.vigotrack.ui.components.ConfigDialog
 import com.maathisv.vigotrack.ui.components.StageDialog
+import com.maathisv.vigotrack.ui.components.ImportResultDialog
+import com.maathisv.vigotrack.ui.components.ImportSummaryDialog
 import com.maathisv.vigotrack.ui.viewmodel.HomeViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -64,6 +66,7 @@ fun StagesListScreen(
     var showConfigDialog by remember { mutableStateOf(false) }
     var stageToEdit by remember { mutableStateOf<Stage?>(null) }
     var stageToDelete by remember { mutableStateOf<Stage?>(null) }
+    var showFabMenu by remember { mutableStateOf(false) }
 
     val connectionState by homeViewModel.connectionState.collectAsState()
     val deviceConnectionStates by homeViewModel.deviceConnectionStates.collectAsState()
@@ -74,6 +77,7 @@ fun StagesListScreen(
     val sensorPatientLinks by homeViewModel.sensorPatientLinks.collectAsState()
     val currentLogUri by homeViewModel.currentLogUri.collectAsState()
     val namingTemplate by homeViewModel.namingTemplate.collectAsState()
+    val importState by homeViewModel.importState.collectAsState()
     val context = LocalContext.current
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -96,6 +100,12 @@ fun StagesListScreen(
         }
     }
 
+    val importFilePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        uri?.let { homeViewModel.parseImportConfig(it) }
+    }
+
     LaunchedEffect(Unit) {
         permissionLauncher.launch(
             arrayOf(
@@ -113,8 +123,29 @@ fun StagesListScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showCreateDialog = true }) {
-                Icon(Icons.Default.Add, contentDescription = "Créer un Stage")
+            Column {
+                FloatingActionButton(onClick = { showFabMenu = true }) {
+                    Icon(Icons.Default.Add, contentDescription = "Actions")
+                }
+                DropdownMenu(
+                    expanded = showFabMenu,
+                    onDismissRequest = { showFabMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Créer un stage") },
+                        onClick = {
+                            showFabMenu = false
+                            showCreateDialog = true
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Importer une config") },
+                        onClick = {
+                            showFabMenu = false
+                            importFilePickerLauncher.launch(arrayOf("application/json"))
+                        }
+                    )
+                }
             }
         }
     ) { padding ->
@@ -220,6 +251,44 @@ fun StagesListScreen(
             },
             onQuerySettings = { deviceId -> homeViewModel.queryAvailableSettings(deviceId) }
         )
+    }
+
+    when (val state = importState) {
+        is HomeViewModel.ImportState.Preview -> {
+            ImportSummaryDialog(
+                preview = state.preview,
+                importing = false,
+                onConfirm = { homeViewModel.confirmImport(state.uri) },
+                onDismiss = { homeViewModel.dismissImportResult() }
+            )
+        }
+        is HomeViewModel.ImportState.Importing -> {
+            ImportSummaryDialog(
+                preview = com.maathisv.vigotrack.data.ImportPreview(0, 0, 0, 0),
+                importing = true,
+                onConfirm = {},
+                onDismiss = {}
+            )
+        }
+        is HomeViewModel.ImportState.Done -> {
+            ImportResultDialog(
+                result = state.result,
+                onDismiss = { homeViewModel.dismissImportResult() }
+            )
+        }
+        is HomeViewModel.ImportState.Error -> {
+            AlertDialog(
+                onDismissRequest = { homeViewModel.dismissImportResult() },
+                title = { Text("Erreur", color = MaterialTheme.colorScheme.error) },
+                text = { Text(state.message) },
+                confirmButton = {
+                    TextButton(onClick = { homeViewModel.dismissImportResult() }) {
+                        Text("OK")
+                    }
+                }
+            )
+        }
+        null -> {}
     }
 }
 

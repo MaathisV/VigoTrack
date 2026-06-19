@@ -53,10 +53,17 @@ fun BilanScreen(
     val stages by homeViewModel.stages.collectAsState()
     val stage = stages.find { it.id == stageId }
     val activities by homeViewModel.getActivitiesForStage(stageId).collectAsState(initial = emptyList())
+    val allActivityTypes by homeViewModel.activityTypes.collectAsState()
     val patients by homeViewModel.patients.collectAsState()
     val sensorPatientLinks by homeViewModel.sensorPatientLinks.collectAsState()
 
-    val bilanTypes = ActivityType.entries.filter { it.category == ActivityCategory.BILAN }
+    val bilanTypes = remember(allActivityTypes, activities) {
+        val fromTable = allActivityTypes.filter { it.category == ActivityCategory.BILAN }
+        val fromStage = activities
+            .filter { it.activityType.category == ActivityCategory.BILAN }
+            .map { it.activityType }
+        (fromTable + fromStage).distinctBy { it.name }
+    }
     val completedMap = remember(activities) { buildCompletedMap(activities) }
 
     var showConfigDialog by remember { mutableStateOf(false) }

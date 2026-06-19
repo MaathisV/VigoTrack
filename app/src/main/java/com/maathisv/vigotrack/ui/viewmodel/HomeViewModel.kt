@@ -2,9 +2,12 @@ package com.maathisv.vigotrack.ui.viewmodel
 
 import android.app.Application
 import android.content.Intent
+import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.maathisv.vigotrack.data.ActivityTypeDataSource
+import com.maathisv.vigotrack.data.ConfigImporter
 import com.maathisv.vigotrack.data.PatientDataSource
 import com.maathisv.vigotrack.data.SensorPatientLinkDataSource
 import com.maathisv.vigotrack.data.StageDataSource
@@ -49,14 +52,40 @@ class HomeViewModel(
     private val sensorRepo: SensorRepository,
     private val patientDataSource: PatientDataSource,
     private val stageDataSource: StageDataSource,
-    private val sensorPatientLinkDataSource: SensorPatientLinkDataSource
+    private val sensorPatientLinkDataSource: SensorPatientLinkDataSource,
+    private val activityTypeDataSource: ActivityTypeDataSource
 ) : AndroidViewModel(application) {
 
     private val prefsManager = PreferencesManager(application)
 
+    private val configImporter = ConfigImporter(
+        patientDataSource = patientDataSource,
+        stageDataSource = stageDataSource,
+        activityDataSource = activityRepo.dataSource,
+        activityTypeDataSource = activityTypeDataSource
+    )
+
+    init {
+        viewModelScope.launch(Dispatchers.IO) {
+            activityTypeDataSource.seedIfEmpty()
+        }
+    }
+
+    sealed class ImportState {
+        data class Preview(val preview: com.maathisv.vigotrack.data.ImportPreview, val uri: android.net.Uri) : ImportState()
+        data object Importing : ImportState()
+        data class Done(val result: com.maathisv.vigotrack.data.ImportResult) : ImportState()
+        data class Error(val message: String) : ImportState()
+    }
+
+    private val _importState = MutableStateFlow<ImportState?>(null)
+    val importState: StateFlow<ImportState?> = _importState.asStateFlow()
+
     val connectionState = sensorRepo.connectionState
     val deviceConnectionStates = sensorRepo.deviceConnectionStates
     val activities = activityRepo.allActivities
+    val activityTypes = activityTypeDataSource.getAll()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val sensorLiveData = sensorRepo.liveData
 
     val connectedDevicesList = combine(
@@ -403,6 +432,32 @@ class HomeViewModel(
         }
     }
 
+    fun parseImportConfig(uri: android.net.Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val preview = configImporter.parse(getApplication(), uri)
+                _importState.value = ImportState.Preview(preview, uri)
+            } catch (e: Exception) {
+                _importState.value = ImportState.Error(e.message ?: "Erreur de lecture du fichier")
+            }
+        }
+    }
+
+    fun confirmImport(uri: android.net.Uri) {
+        _importState.value = ImportState.Importing
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val result = configImporter.import(getApplication(), uri)
+                _importState.value = ImportState.Done(result)
+            } catch (e: Exception) {
+                _importState.value = ImportState.Error(e.message ?: "Erreur lors de l'import")
+            }
+        }
+    }
+
+    fun dismissImportResult() {
+        _importState.value = null
+    }
     fun updateActivityType(activity: ActivitySession, newType: ActivityType) {
         viewModelScope.launch(Dispatchers.IO) {
             activityRepo.updateActivity(activity.copy(activityType = newType))

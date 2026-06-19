@@ -3,13 +3,15 @@ package com.maathisv.vigotrack.data.mappers
 import com.maathisv.vigotrack.data.ActivityWithLinks
 import com.maathisv.vigotrack.data.entities.ActivityLinkEntity
 import com.maathisv.vigotrack.data.entities.ActivitySessionEntity
+import com.maathisv.vigotrack.models.ActivityCategory
 import com.maathisv.vigotrack.models.ActivitySession
 import com.maathisv.vigotrack.models.ActivityType
 
 fun ActivityWithLinks.toDomain(): ActivitySession {
     return ActivitySession(
         id = activity.id,
-        activityType = ActivityType.valueOf(activity.activityType),
+        activityType = ActivityType.fromName(activity.activityType)
+            ?: ActivityType(activity.activityType, activity.activityType, ActivityCategory.ACTIVITE),
         scheduledDate = activity.scheduledDate,
         startTime = activity.startTime,
         endTime = activity.endTime,

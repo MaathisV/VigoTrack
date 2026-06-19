@@ -27,7 +27,7 @@ fun ActivityTypeChips(
         ) {
             activiteTypes.forEach { type ->
                 FilterChip(
-                    selected = selectedType == type,
+                    selected = selectedType?.name == type.name,
                     onClick = { onTypeSelected(type) },
                     label = { Text(type.displayName) }
                 )

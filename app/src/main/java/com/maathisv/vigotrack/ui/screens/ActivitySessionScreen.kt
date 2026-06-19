@@ -57,6 +57,7 @@ fun ActivitySessionScreen(
     onTypeChanged: (String) -> Unit = {}
 ) {
     val allActivities by homeViewModel.activities.collectAsState(initial = emptyList())
+    val allActivityTypes by homeViewModel.activityTypes.collectAsState()
     val allLiveData by homeViewModel.sensorLiveData.collectAsState()
     val connectedSensors by homeViewModel.connectedDevicesList.collectAsState()
     val preLinks by homeViewModel.sensorPatientLinks.collectAsState()
@@ -65,10 +66,23 @@ fun ActivitySessionScreen(
 
     val activity = allActivities.find { it.id == activityId }
 
-    val bilanTypes = ActivityType.entries.filter { it.category == ActivityCategory.BILAN }
-    val activiteTypes = ActivityType.entries.filter { it.category == ActivityCategory.ACTIVITE }
-
     var currentType by remember(activity) { mutableStateOf(activity?.activityType) }
+
+    val stageActivities = remember(allActivities, activity?.stageId) {
+        activity?.stageId?.let { sid -> allActivities.filter { it.stageId == sid } } ?: emptyList()
+    }
+
+    val bilanTypes = remember(allActivityTypes, stageActivities) {
+        val fromTable = allActivityTypes.filter { it.category == ActivityCategory.BILAN }
+        val fromStage = stageActivities.map { it.activityType }.filter { ActivityType.fromName(it.name) == null }
+        (fromTable + fromStage).distinctBy { it.name }
+    }
+
+    val activiteTypes = remember(allActivityTypes, stageActivities) {
+        val fromTable = allActivityTypes.filter { it.category == ActivityCategory.ACTIVITE }
+        val fromStage = stageActivities.map { it.activityType }.filter { ActivityType.fromName(it.name) == null }
+        (fromTable + fromStage).distinctBy { it.name }
+    }
 
     val checkedSensorIds = remember { mutableStateMapOf<String, Boolean>() }
     var compactView by remember { mutableStateOf(false) }
@@ -94,7 +108,7 @@ fun ActivitySessionScreen(
         topBar = {
             AppTopBar(
                 title = if (activity?.isRunning == true) "En cours"
-                        else currentType?.displayName ?: "Session",
+                        else currentType?.let { ct -> allActivityTypes.find { it.name == ct.name }?.displayName ?: ct.displayName } ?: "Session",
                 onBack = onBack
             )
         }
