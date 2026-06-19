@@ -68,15 +68,6 @@ fun StagesListScreen(
     var stageToDelete by remember { mutableStateOf<Stage?>(null) }
     var showFabMenu by remember { mutableStateOf(false) }
 
-    val connectionState by homeViewModel.connectionState.collectAsState()
-    val deviceConnectionStates by homeViewModel.deviceConnectionStates.collectAsState()
-    val scannedDevices by homeViewModel.scannedDevices.collectAsState()
-    val connectedDevicesList by homeViewModel.connectedDevicesList.collectAsState()
-    val connectingId by homeViewModel.isConnectingToId.collectAsState()
-    val patients by homeViewModel.patients.collectAsState()
-    val sensorPatientLinks by homeViewModel.sensorPatientLinks.collectAsState()
-    val currentLogUri by homeViewModel.currentLogUri.collectAsState()
-    val namingTemplate by homeViewModel.namingTemplate.collectAsState()
     val importState by homeViewModel.importState.collectAsState()
     val context = LocalContext.current
 
@@ -209,49 +200,12 @@ fun StagesListScreen(
         )
     }
 
-    if (showConfigDialog) {
-        val showFeatures by homeViewModel.showFeatures.collectAsState()
-        val logFeatures by homeViewModel.logFeatures.collectAsState()
-        val availableSettings by homeViewModel.availableSettings.collectAsState()
-        val selectedSettings by homeViewModel.selectedSettings.collectAsState()
-        val deviceDataTypes by homeViewModel.deviceAvailableDataTypes.collectAsState()
-        ConfigDialog(
-            scannedDevices = scannedDevices,
-            connectedDevicesList = connectedDevicesList,
-            deviceConnectionStates = deviceConnectionStates,
-            connectingId = connectingId,
-            patients = patients,
-            sensorPatientLinks = sensorPatientLinks,
-            currentLogUri = currentLogUri,
-            namingTemplate = namingTemplate,
-            showFeatures = showFeatures,
-            logFeatures = logFeatures,
-            availableSettings = availableSettings,
-            selectedSettings = selectedSettings,
-            deviceAvailableDataTypes = deviceDataTypes,
-            onDismiss = { showConfigDialog = false },
-            onConnect = { sensor -> homeViewModel.connectToDevice(sensor) },
-            onDisconnect = { id -> homeViewModel.disconnectFromDevice(id) },
-            onRenameSensor = { deviceId, name -> homeViewModel.renameSensor(deviceId, name) },
-            onAddPatient = { name -> homeViewModel.addPatient(name) },
-            onDeletePatient = { patient -> homeViewModel.deletePatient(patient) },
-            onPickLogFolder = { folderPickerLauncher.launch(null) },
-            onTemplateChange = { homeViewModel.updateNamingTemplate(it) },
-            onResetTemplate = { homeViewModel.resetNamingTemplate() },
-            onCreateSensorPatientLink = { patientId, sensorId, features ->
-                homeViewModel.createSensorPatientLink(patientId, sensorId, features)
-            },
-            onDeleteSensorPatientLink = { link ->
-                homeViewModel.deleteSensorPatientLink(link)
-            },
-            onToggleShowFeature = { feature -> homeViewModel.toggleShowFeature(feature) },
-            onToggleLogFeature = { feature -> homeViewModel.toggleLogFeature(feature) },
-            onSensorSettingsChanged = { deviceId, feature, rate, resolution ->
-                homeViewModel.setSensorSettings(deviceId, feature, rate, resolution)
-            },
-            onQuerySettings = { deviceId -> homeViewModel.queryAvailableSettings(deviceId) }
-        )
-    }
+    ConfigDialog(
+        homeViewModel = homeViewModel,
+        show = showConfigDialog,
+        onDismiss = { showConfigDialog = false },
+        onPickLogFolder = { folderPickerLauncher.launch(null) }
+    )
 
     when (val state = importState) {
         is HomeViewModel.ImportState.Preview -> {
