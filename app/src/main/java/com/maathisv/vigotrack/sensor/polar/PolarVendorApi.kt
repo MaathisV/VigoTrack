@@ -69,6 +69,8 @@ class PolarVendorApi(
     override val events: Flow<SensorEvent> = _events.asSharedFlow()
 
     private val activeStreamJobs = mutableMapOf<Pair<String, SensorDataType>, Job>()
+    private val gattReadyDevices = mutableSetOf<String>()
+    private val pendingStreams = mutableMapOf<String, MutableList<Pair<SensorDataType, Any?>>>()
 
     init {
         setupCallbacks()
@@ -100,42 +102,50 @@ class PolarVendorApi(
 
             override fun bleSdkFeatureReady(identifier: String, feature: PolarBleApi.PolarBleSdkFeature) {
                 Log.d("PolarVendorApi", "Feature ready: $feature for $identifier")
-                if (feature == PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_DEVICE_TIME_SETUP) {
-                    scope.launch {
-                        try {
-                            api.setLocalTime(identifier, LocalDateTime.now())
-                            Log.d("PolarVendorApi", "Time synced for $identifier")
-                        } catch (e: Exception) {
-                            Log.w("PolarVendorApi", "Time sync failed for $identifier", e)
+                when (feature) {
+                    PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_DEVICE_TIME_SETUP -> {
+                        scope.launch {
+                            try {
+                                api.setLocalTime(identifier, LocalDateTime.now())
+                                Log.d("PolarVendorApi", "Time synced for $identifier")
+                            } catch (e: Exception) {
+                                Log.w("PolarVendorApi", "Time sync failed for $identifier", e)
+                            }
                         }
                     }
+                    PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_ONLINE_STREAMING -> {
+                        gattReadyDevices.add(identifier)
+                        scope.launch {
+                            try {
+                                val types = api.getAvailableOnlineStreamDataTypes(identifier)
+                                val mapped = types.mapNotNull { it.toSensorDataType() }.toSet()
+                                _events.tryEmit(SensorEvent.FeaturesReady(identifier, mapped))
+                            } catch (e: Exception) {
+                                Log.e("PolarVendorApi", "Failed to get stream types", e)
+                            }
+                            yield()
+                            pendingStreams.remove(identifier)?.forEach { (dataType, settings) ->
+                                startStreamNow(identifier, dataType, settings)
+                            }
+                        }
+                    }
+                    PolarBleApi.PolarBleSdkFeature.FEATURE_HR -> {
+                        scope.launch {
+                            try {
+                                val types = api.getAvailableHRServiceDataTypes(identifier)
+                                val mapped = types.mapNotNull { it.toSensorDataType() }.toSet()
+                                _events.tryEmit(SensorEvent.FeaturesReady(identifier, mapped))
+                            } catch (e: Exception) {
+                                Log.e("PolarVendorApi", "Failed to get HR types", e)
+                            }
+                        }
+                    }
+                    else -> {}
                 }
             }
 
             override fun bleSdkFeaturesReadiness(identifier: String, ready: List<PolarBleApi.PolarBleSdkFeature>, unavailable: List<PolarBleApi.PolarBleSdkFeature>) {
-                Log.d("PolarVendorApi", "Features readiness for $identifier. Ready: $ready")
-                if (ready.contains(PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_ONLINE_STREAMING)) {
-                    scope.launch {
-                        try {
-                            val types = api.getAvailableOnlineStreamDataTypes(identifier)
-                            val mapped = types.mapNotNull { it.toSensorDataType() }.toSet()
-                            _events.tryEmit(SensorEvent.FeaturesReady(identifier, mapped))
-                        } catch (e: Exception) {
-                            Log.e("PolarVendorApi", "Failed to get stream types", e)
-                        }
-                    }
-                }
-                if (ready.contains(PolarBleApi.PolarBleSdkFeature.FEATURE_HR)) {
-                    scope.launch {
-                        try {
-                            val types = api.getAvailableHRServiceDataTypes(identifier)
-                            val mapped = types.mapNotNull { it.toSensorDataType() }.toSet()
-                            _events.tryEmit(SensorEvent.FeaturesReady(identifier, mapped))
-                        } catch (e: Exception) {
-                            Log.e("PolarVendorApi", "Failed to get HR types", e)
-                        }
-                    }
-                }
+                Log.d("PolarVendorApi", "Features readiness for $identifier. Ready: $ready, Unavailable: $unavailable")
             }
 
             override fun disInformationReceived(identifier: String, disInfo: DisInfo) {
@@ -164,6 +174,8 @@ class PolarVendorApi(
     override fun disconnectFromDevice(deviceId: String) {
         activeStreamJobs.filterKeys { it.first == deviceId }.values.forEach { it.cancel() }
         activeStreamJobs.keys.filter { it.first == deviceId }.forEach { activeStreamJobs.remove(it) }
+        pendingStreams.remove(deviceId)
+        gattReadyDevices.remove(deviceId)
         api.disconnectFromDevice(deviceId)
     }
 
@@ -237,7 +249,14 @@ class PolarVendorApi(
 
     override fun startStreaming(deviceId: String, dataType: SensorDataType, settings: Any?) {
         if (activeStreamJobs.containsKey(deviceId to dataType)) return
+        if (deviceId in gattReadyDevices) {
+            startStreamNow(deviceId, dataType, settings)
+        } else {
+            pendingStreams.getOrPut(deviceId) { mutableListOf() }.add(dataType to settings)
+        }
+    }
 
+    private fun startStreamNow(deviceId: String, dataType: SensorDataType, settings: Any?) {
         val job = when (dataType) {
             SensorDataType.HR -> startHrStream(deviceId)
             SensorDataType.PPI -> startPpiStream(deviceId)
