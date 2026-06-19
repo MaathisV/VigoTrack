@@ -22,6 +22,10 @@ class VendorApiRegistry(
         findByVendorName(vendorName)?.connectToDevice(deviceId)
     }
 
+    suspend fun forceReconnect(deviceId: String, address: String, vendorName: String): Boolean {
+        return findByVendorName(vendorName)?.forceReconnect(deviceId, address) ?: false
+    }
+
     fun disconnectFromDevice(deviceId: String, vendorName: String) {
         findByVendorName(vendorName)?.disconnectFromDevice(deviceId)
     }

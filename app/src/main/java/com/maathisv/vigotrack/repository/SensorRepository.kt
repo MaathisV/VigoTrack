@@ -77,6 +77,7 @@ class SensorRepository(
     private val _availableStreamDataTypes = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
     val availableStreamDataTypes: StateFlow<Map<String, Set<String>>> = _availableStreamDataTypes.asStateFlow()
 
+    private val connectingLock = mutableSetOf<String>()
     private val activeStreams = mutableSetOf<StreamIdentifier>()
     private val previousHr = mutableMapOf<String, Int>()
 
@@ -88,7 +89,6 @@ class SensorRepository(
 
     init {
         observeVendorEvents()
-        autoReconnectToSavedDevices()
         registerBleAclReceiver()
     }
 
@@ -150,44 +150,45 @@ class SensorRepository(
         }
     }
 
-    private fun autoReconnectToSavedDevices() {
-        repositoryScope.launch {
-            dataSource.getSavedSensors().first().forEach { saved ->
-                Log.d(TAG, "Auto-reconnecting to saved device: ${saved.deviceId} (${saved.name})")
-                connectWithRetry(saved.deviceId, saved.vendor, saved.address)
-            }
-        }
-    }
-
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     private suspend fun connectWithRetry(deviceId: String, vendorName: String = "polar", address: String? = null, maxRetries: Int = 3) {
-        if (address != null && isDeviceSystemConnected(address) && deviceId !in _connectedDeviceIds.value) {
-            Log.d(TAG, "Forcing clean reconnection for $deviceId")
-            _deviceConnectionStates.update { it + (deviceId to ConnectionState.CONNECTING) }
-            try {
-                vendorRegistry.disconnectFromDevice(deviceId, vendorName)
-                delay(500)
-                vendorRegistry.connectToDevice(deviceId, vendorName)
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to re-establish session for $deviceId", e)
-                _deviceConnectionStates.update { it + (deviceId to ConnectionState.NOT_CONNECTED) }
-            }
+        if (!connectingLock.add(deviceId)) {
+            Log.d(TAG, "Connection already in progress for $deviceId, skipping")
             return
         }
-        _deviceConnectionStates.update { it + (deviceId to ConnectionState.CONNECTING) }
-        repeat(maxRetries) { attempt ->
-            try {
-                vendorRegistry.connectToDevice(deviceId, vendorName)
+        try {
+            if (address != null && isDeviceSystemConnected(address) && deviceId !in _connectedDeviceIds.value) {
+                Log.d(TAG, "Force-reconnecting to system-connected device: $deviceId")
+                _deviceConnectionStates.update { it + (deviceId to ConnectionState.CONNECTING) }
+                try {
+                    val dropped = vendorRegistry.forceReconnect(deviceId, address, vendorName)
+                    if (!dropped) {
+                        Log.e(TAG, "forceReconnect returned false for $deviceId, falling back")
+                        vendorRegistry.connectToDevice(deviceId, vendorName)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to re-establish session for $deviceId", e)
+                    _deviceConnectionStates.update { it + (deviceId to ConnectionState.NOT_CONNECTED) }
+                }
                 return
-            } catch (e: Exception) {
-                if (attempt < maxRetries - 1) {
-                    Log.w(TAG, "Retry $attempt for $deviceId: ${e.message}")
-                    delay(2000)
+            }
+            _deviceConnectionStates.update { it + (deviceId to ConnectionState.CONNECTING) }
+            repeat(maxRetries) { attempt ->
+                try {
+                    vendorRegistry.connectToDevice(deviceId, vendorName)
+                    return
+                } catch (e: Exception) {
+                    if (attempt < maxRetries - 1) {
+                        Log.w(TAG, "Retry $attempt for $deviceId: ${e.message}")
+                        delay(2000)
+                    }
                 }
             }
+            _deviceConnectionStates.update { it + (deviceId to ConnectionState.NOT_CONNECTED) }
+            Log.e(TAG, "Could not reconnect to $deviceId after $maxRetries attempts")
+        } finally {
+            connectingLock.remove(deviceId)
         }
-        _deviceConnectionStates.update { it + (deviceId to ConnectionState.NOT_CONNECTED) }
-        Log.e(TAG, "Could not reconnect to $deviceId after $maxRetries attempts")
     }
 
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
@@ -275,10 +276,7 @@ class SensorRepository(
     }
 
     private fun registerBleAclReceiver() {
-        val filter = IntentFilter().apply {
-            addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
-            addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
-        }
+        val filter = IntentFilter(BluetoothDevice.ACTION_ACL_CONNECTED)
         context.applicationContext.registerReceiver(bleAclReceiver, filter)
     }
 
@@ -286,9 +284,8 @@ class SensorRepository(
         override fun onReceive(context: Context, intent: Intent) {
             val device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
             val macAddress = device?.address ?: return
-            when (intent.action) {
-                BluetoothDevice.ACTION_ACL_CONNECTED -> handleSystemBleReconnection(macAddress)
-                BluetoothDevice.ACTION_ACL_DISCONNECTED -> handleSystemBleDisconnection(macAddress)
+            if (intent.action == BluetoothDevice.ACTION_ACL_CONNECTED) {
+                handleSystemBleReconnection(macAddress)
             }
         }
     }
@@ -300,23 +297,6 @@ class SensorRepository(
             if (saved != null && saved.deviceId !in _connectedDeviceIds.value) {
                 Log.d(TAG, "System BLE reconnection detected for: ${saved.deviceId}")
                 connectWithRetry(saved.deviceId, saved.vendor, saved.address)
-            }
-        }
-    }
-
-    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
-    private fun handleSystemBleDisconnection(macAddress: String) {
-        repositoryScope.launch {
-            val saved = dataSource.getSavedSensors().first().firstOrNull {
-                it.deviceId == macAddress || it.address == macAddress
-            }
-            if (saved == null || saved.deviceId !in _connectedDeviceIds.value) return@launch
-            delay(2000)
-            if (!isDeviceSystemConnected(saved.address)) {
-                Log.d(TAG, "System BLE disconnection confirmed for: ${saved.deviceId}")
-                _connectedDeviceIds.update { it - saved.deviceId }
-                _availableStreamDataTypes.update { it - saved.deviceId }
-                _deviceConnectionStates.update { it - saved.deviceId }
             }
         }
     }
