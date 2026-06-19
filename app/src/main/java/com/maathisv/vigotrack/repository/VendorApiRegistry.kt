@@ -34,9 +34,6 @@ class VendorApiRegistry(
         vendors.forEach { it.onForegroundEntered() }
     }
 
-    fun getAvailableDataTypes(deviceId: String, vendorName: String): Set<SensorDataType> =
-        findByVendorName(vendorName)?.getAvailableDataTypes(deviceId) ?: emptySet()
-
     suspend fun getAvailableSettings(deviceId: String, vendorName: String, dataType: SensorDataType): Map<String, Set<Int>>? =
         findByVendorName(vendorName)?.getAvailableSettings(deviceId, dataType)
 

@@ -2,7 +2,6 @@ package com.maathisv.vigotrack.ui.viewmodel
 
 import android.app.Application
 import android.content.Intent
-import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -81,7 +80,6 @@ class HomeViewModel(
     private val _importState = MutableStateFlow<ImportState?>(null)
     val importState: StateFlow<ImportState?> = _importState.asStateFlow()
 
-    val connectionState = sensorRepo.connectionState
     val deviceConnectionStates = sensorRepo.deviceConnectionStates
     val activities = activityRepo.allActivities
     val activityTypes = activityTypeDataSource.getAll()
@@ -133,10 +131,10 @@ class HomeViewModel(
             listOf("ACC", "ECG").filter { it in supported }.forEach { feature ->
                 val result = sensorRepo.getAvailableSettings(deviceId, feature)
                 if (result != null) {
-                    _availableSettings.value = _availableSettings.value + ("$deviceId:$feature" to result)
-                    _selectedSettings.value = _selectedSettings.value + ("$deviceId:$feature" to (
-                        prefsManager.getSampleRate(deviceId, feature) to prefsManager.getResolution(deviceId, feature)
-                    ))
+                    _availableSettings.value += ("$deviceId:$feature" to result)
+                    _selectedSettings.value += ("$deviceId:$feature" to (
+                                            prefsManager.getSampleRate(deviceId, feature) to prefsManager.getResolution(deviceId, feature)
+                                        ))
                 }
             }
         }
@@ -145,7 +143,7 @@ class HomeViewModel(
     fun setSensorSettings(deviceId: String, feature: String, sampleRate: Int, resolution: Int) {
         prefsManager.setSampleRate(deviceId, feature, sampleRate)
         prefsManager.setResolution(deviceId, feature, resolution)
-        _selectedSettings.value = _selectedSettings.value + ("$deviceId:$feature" to (sampleRate to resolution))
+        _selectedSettings.value += ("$deviceId:$feature" to (sampleRate to resolution))
     }
 
     private fun buildSensorSettings(deviceId: String, feature: String): Any? {
@@ -156,10 +154,6 @@ class HomeViewModel(
         if (sampleRate > 0) map[PolarSensorSetting.SettingType.SAMPLE_RATE] = sampleRate
         if (resolution > 0) map[PolarSensorSetting.SettingType.RESOLUTION] = resolution
         return PolarSensorSetting(map)
-    }
-
-    fun getAvailableFeaturesForDevice(deviceId: String): Set<String> {
-        return sensorRepo.getAvailableFeaturesForDevice(deviceId)
     }
 
     private val _currentLogUri = MutableStateFlow(prefsManager.logUri)
@@ -239,16 +233,6 @@ class HomeViewModel(
 
     fun renameSensor(deviceId: String, newName: String) {
         sensorRepo.updateSensorDisplayName(deviceId, newName)
-    }
-
-    fun createActivity(type: ActivityType, date: Long, stageId: Long? = null, onCreated: ((String) -> Unit)? = null) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val id = java.util.UUID.randomUUID().toString()
-            activityRepo.createActivity(type, date, stageId, id)
-            withContext(Dispatchers.Main) {
-                onCreated?.invoke(id)
-            }
-        }
     }
 
     fun createActivityAndLink(

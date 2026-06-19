@@ -1,7 +1,6 @@
 package com.maathisv.vigotrack.ui.components
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -239,7 +238,7 @@ private fun SensorSettingsSection(
             val key = "$deviceId:$feature"
             val settingsMap = availableSettings[key]
             val (currentRate, currentRes) = selectedSettings[key] ?: (0 to 0)
-            val displayRate = if (currentRate > 0) "${currentRate} Hz" else "Max"
+            val displayRate = if (currentRate > 0) "$currentRate Hz" else "Max"
             val displayRes = if (currentRes > 0) "${currentRes}-bit" else "Max"
 
             if (settingsMap != null && isConnected) {
@@ -277,7 +276,7 @@ private fun SensorSettingsSection(
                                             selected = currentRate == rate,
                                             onClick = null
                                         )
-                                        Text("${rate} Hz", style = MaterialTheme.typography.bodySmall)
+                                        Text("$rate Hz", style = MaterialTheme.typography.bodySmall)
                                     }
                                 }
                             }

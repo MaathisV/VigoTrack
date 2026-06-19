@@ -321,8 +321,4 @@ class PolarVendorApi(
     override fun onForegroundEntered() {
         api.foregroundEntered()
     }
-
-    fun destroy() {
-        scope.cancel()
-    }
 }

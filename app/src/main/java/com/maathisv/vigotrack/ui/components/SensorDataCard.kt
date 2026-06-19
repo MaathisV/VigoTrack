@@ -1,5 +1,6 @@
 package com.maathisv.vigotrack.ui.components
 
+import android.annotation.SuppressLint
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -114,13 +115,13 @@ fun SensorDataCard(
         if (link.streamEULER && showFeatures.getOrDefault("EULER", true)) FeatureData(
             label = "EULER", valueText = eulerText, unit = "R/P/Y",
             valueColor = MaterialTheme.colorScheme.onSurface,
-            graphValue = if (eulerRoll != null) eulerRoll else null,
+            graphValue = eulerRoll,
             graphColor = MaterialTheme.colorScheme.tertiary
         ) else null,
-        if (link.streamFREE_ACCEL && showFeatures.getOrDefault("FREE_ACCELERATION", true)) FeatureData(
+        if (link.streamFreeACCEL && showFeatures.getOrDefault("FREE_ACCELERATION", true)) FeatureData(
             label = "FREE ACC", valueText = freeAccText, unit = "m/s²",
             valueColor = MaterialTheme.colorScheme.onSurface,
-            graphValue = if (freeAccX != null) freeAccX else null,
+            graphValue = freeAccX,
             graphColor = MaterialTheme.colorScheme.secondary
         ) else null
     )
@@ -180,11 +181,11 @@ fun SensorDataCard(
 
 @Composable
 fun CompactSensorDataCard(
+    modifier: Modifier = Modifier,
     link: ActivitySession.ActivityLink,
     sensorName: String? = null,
     sensorData: Map<String, Any>?,
-    showFeatures: Map<String, Boolean> = emptyMap(),
-    modifier: Modifier = Modifier
+    showFeatures: Map<String, Boolean> = emptyMap()
 ) {
     val hrValue = (sensorData?.get("HR") as? Number)?.toInt()
     val ppiValue = (sensorData?.get("PPI") as? Number)?.toInt()

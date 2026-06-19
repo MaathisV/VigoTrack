@@ -19,6 +19,7 @@ import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -38,8 +39,12 @@ fun StageDialog(
 ) {
     val isEditing = initialStage != null
     var name by remember { mutableStateOf(initialStage?.name ?: "") }
-    var startDate by remember { mutableStateOf(initialStage?.startDate ?: System.currentTimeMillis()) }
-    var endDate by remember { mutableStateOf(initialStage?.endDate ?: System.currentTimeMillis() + 7 * 24 * 60 * 60 * 1000L) }
+    var startDate by remember { mutableLongStateOf(initialStage?.startDate ?: System.currentTimeMillis()) }
+    var endDate by remember {
+        mutableLongStateOf(
+            initialStage?.endDate ?: (System.currentTimeMillis() + 7 * 24 * 60 * 60 * 1000L)
+        )
+    }
     var showStartPicker by remember { mutableStateOf(false) }
     var showEndPicker by remember { mutableStateOf(false) }
     val dateFormat = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()) }

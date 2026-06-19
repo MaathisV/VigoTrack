@@ -2,7 +2,6 @@ package com.maathisv.vigotrack.ui.components
 
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -135,7 +134,6 @@ fun ConfigDialog(
         if (show) homeViewModel.startScanning()
     }
     if (!show) return
-    val connectionState by homeViewModel.connectionState.collectAsState()
     val deviceConnectionStates by homeViewModel.deviceConnectionStates.collectAsState()
     val scannedDevices by homeViewModel.scannedDevices.collectAsState()
     val connectedDevicesList by homeViewModel.connectedDevicesList.collectAsState()

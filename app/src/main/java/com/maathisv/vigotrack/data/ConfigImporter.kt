@@ -37,7 +37,7 @@ class ConfigImporter(
     private val activityTypeDataSource: ActivityTypeDataSource
 ) {
 
-    suspend fun parse(context: Context, uri: Uri): ImportPreview {
+     fun parse(context: Context, uri: Uri): ImportPreview {
         val jsonString = readJson(context, uri)
         val json = JSONObject(jsonString)
         validate(json)

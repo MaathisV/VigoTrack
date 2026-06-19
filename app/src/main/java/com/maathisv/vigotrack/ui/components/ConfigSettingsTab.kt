@@ -64,7 +64,7 @@ fun ConfigSettingsTab(
         Spacer(modifier = Modifier.height(12.dp))
 
         OutlinedTextField(
-            value = if (currentLogUri.isBlank()) "Aucun dossier sélectionné" else currentLogUri,
+            value = currentLogUri.ifBlank { "Aucun dossier sélectionné" },
             onValueChange = {},
             readOnly = true,
             label = { Text("URI du dossier actuel") },

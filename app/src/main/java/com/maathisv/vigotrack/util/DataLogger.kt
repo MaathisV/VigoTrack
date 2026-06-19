@@ -30,10 +30,8 @@ class DataLogger(
         val segments = fullPath.split("/").filter { it.isNotBlank() }
         if (segments.isEmpty()) return
 
-        val streamKey = fullPath
-
         try {
-            val stream = streams.getOrPut(streamKey) {
+            val stream = streams.getOrPut(fullPath) {
                 val dirSegments = segments.dropLast(1)
                 val leafDir = if (dirSegments.isEmpty()) {
                     DocumentFile.fromTreeUri(context, rootUri)
@@ -47,9 +45,9 @@ class DataLogger(
                 context.contentResolver.openOutputStream(file!!.uri, "wa")!!
             }
 
-            if (!headersWritten.contains(streamKey)) {
+            if (!headersWritten.contains(fullPath)) {
                 stream.write("$header\n".toByteArray())
-                headersWritten.add(streamKey)
+                headersWritten.add(fullPath)
             }
 
             stream.write("$dataLine\n".toByteArray())

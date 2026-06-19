@@ -35,7 +35,7 @@ data class ActivitySession(
         val streamECG: Boolean get() = featuresToTrack.contains("ECG")
         val streamEULER: Boolean get() = featuresToTrack.contains("EULER")
         val streamQUATERNION: Boolean get() = featuresToTrack.contains("QUATERNION")
-        val streamFREE_ACCEL: Boolean get() = featuresToTrack.contains("FREE_ACCELERATION")
+        val streamFreeACCEL: Boolean get() = featuresToTrack.contains("FREE_ACCELERATION")
     }
 }
 

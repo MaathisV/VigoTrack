@@ -2,9 +2,9 @@ package com.maathisv.vigotrack.util
 
 import android.content.Context
 import android.util.Log
+import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import com.maathisv.vigotrack.models.ActivitySession
-import androidx.core.net.toUri
 
 private const val TAG = "ExportMarker"
 

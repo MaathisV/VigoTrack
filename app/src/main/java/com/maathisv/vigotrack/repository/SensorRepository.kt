@@ -45,9 +45,9 @@ class SensorRepository(
     private val dataSource: SensorDataSource,
     private val vendorRegistry: VendorApiRegistry
 ) {
-    private val TAG = "VigoTrack"
+    private val tag = "VigoTrack"
     private val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
-        Log.e(TAG, "Unhandled error in repository scope", throwable)
+        Log.e(tag, "Unhandled error in repository scope", throwable)
     }
     private val repositoryScope = CoroutineScope(Dispatchers.Main + SupervisorJob() + exceptionHandler)
 
@@ -130,7 +130,7 @@ class SensorRepository(
                         }
                     }
                     is SensorEvent.Error -> {
-                        Log.e(TAG, "Vendor error for ${event.deviceId}", event.error)
+                        Log.e(tag, "Vendor error for ${event.deviceId}", event.error)
                     }
                 }
             }
@@ -153,21 +153,21 @@ class SensorRepository(
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     private suspend fun connectWithRetry(deviceId: String, vendorName: String = "polar", address: String? = null, maxRetries: Int = 3) {
         if (!connectingLock.add(deviceId)) {
-            Log.d(TAG, "Connection already in progress for $deviceId, skipping")
+            Log.d(tag, "Connection already in progress for $deviceId, skipping")
             return
         }
         try {
             if (address != null && isDeviceSystemConnected(address) && deviceId !in _connectedDeviceIds.value) {
-                Log.d(TAG, "Force-reconnecting to system-connected device: $deviceId")
+                Log.d(tag, "Force-reconnecting to system-connected device: $deviceId")
                 _deviceConnectionStates.update { it + (deviceId to ConnectionState.CONNECTING) }
                 try {
                     val dropped = vendorRegistry.forceReconnect(deviceId, address, vendorName)
                     if (!dropped) {
-                        Log.e(TAG, "forceReconnect returned false for $deviceId, falling back")
+                        Log.e(tag, "forceReconnect returned false for $deviceId, falling back")
                         vendorRegistry.connectToDevice(deviceId, vendorName)
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to re-establish session for $deviceId", e)
+                    Log.e(tag, "Failed to re-establish session for $deviceId", e)
                     _deviceConnectionStates.update { it + (deviceId to ConnectionState.NOT_CONNECTED) }
                 }
                 return
@@ -179,13 +179,13 @@ class SensorRepository(
                     return
                 } catch (e: Exception) {
                     if (attempt < maxRetries - 1) {
-                        Log.w(TAG, "Retry $attempt for $deviceId: ${e.message}")
+                        Log.w(tag, "Retry $attempt for $deviceId: ${e.message}")
                         delay(2000)
                     }
                 }
             }
             _deviceConnectionStates.update { it + (deviceId to ConnectionState.NOT_CONNECTED) }
-            Log.e(TAG, "Could not reconnect to $deviceId after $maxRetries attempts")
+            Log.e(tag, "Could not reconnect to $deviceId after $maxRetries attempts")
         } finally {
             connectingLock.remove(deviceId)
         }
@@ -295,7 +295,7 @@ class SensorRepository(
             val knownDevices = dataSource.getSavedSensors().first()
             val saved = knownDevices.firstOrNull { it.deviceId == macAddress || it.address == macAddress }
             if (saved != null && saved.deviceId !in _connectedDeviceIds.value) {
-                Log.d(TAG, "System BLE reconnection detected for: ${saved.deviceId}")
+                Log.d(tag, "System BLE reconnection detected for: ${saved.deviceId}")
                 connectWithRetry(saved.deviceId, saved.vendor, saved.address)
             }
         }
@@ -380,13 +380,13 @@ class SensorRepository(
     fun startFeatureStream(deviceId: String, feature: String, settings: Any? = null) {
         val available = _availableStreamDataTypes.value[deviceId] ?: emptySet()
         if (feature !in available) {
-            Log.w(TAG, "Cannot start $feature yet. $deviceId is not ready.")
+            Log.w(tag, "Cannot start $feature yet. $deviceId is not ready.")
             return
         }
 
         val id = StreamIdentifier(deviceId, feature)
         if (id in activeStreams) {
-            Log.d(TAG, "Stream $feature already active for $deviceId. Skipping.")
+            Log.d(tag, "Stream $feature already active for $deviceId. Skipping.")
             return
         }
 
@@ -395,16 +395,7 @@ class SensorRepository(
 
         vendorRegistry.startStreaming(deviceId, vendor, dataType, settings)
         activeStreams.add(id)
-        Log.d(TAG, "Started streaming $feature for $deviceId via $vendor")
-    }
-
-    suspend fun startActivityStreaming(session: ActivitySession) {
-        session.links.forEach { link ->
-            link.featuresToTrack.forEach { feature ->
-                startFeatureStream(link.sensorId, feature)
-                delay(300)
-            }
-        }
+        Log.d(tag, "Started streaming $feature for $deviceId via $vendor")
     }
 
     fun stopActivityStreaming(deviceId: String) {
