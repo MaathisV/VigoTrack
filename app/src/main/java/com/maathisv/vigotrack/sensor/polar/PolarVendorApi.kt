@@ -2,13 +2,8 @@ package com.maathisv.vigotrack.sensor.polar
 
 import android.Manifest
 import android.bluetooth.BluetoothDevice
-import android.bluetooth.BluetoothGatt
-import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothManager
-import android.bluetooth.BluetoothProfile
 import android.content.Context
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
 import androidx.annotation.RequiresPermission
 import com.maathisv.vigotrack.sensor.api.ScannedDevice
@@ -28,9 +23,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.yield
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -184,50 +177,21 @@ class PolarVendorApi(
         disconnectFromDevice(deviceId)
         val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
         val device = bluetoothManager.adapter?.getRemoteDevice(address) ?: return false
-        return forceDropBleLink(device).also { dropped ->
-            if (dropped) {
-                Log.d("PolarVendorApi", "BLE link dropped, reconnecting SDK session for $deviceId")
-                connectToDevice(deviceId)
-            } else {
-                Log.e("PolarVendorApi", "Failed to drop BLE link for $deviceId")
-            }
-        }
+        // Start SDK scan FIRST so it's running when the bond breaks
+        connectToDevice(deviceId)
+        // THEN remove the OS bond — device advertises, the running scan catches it
+        removeBond(device)
+        return true
     }
 
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
-    private suspend fun forceDropBleLink(device: BluetoothDevice): Boolean = suspendCancellableCoroutine { cont ->
-        val gatt = device.connectGatt(context, false, object : BluetoothGattCallback() {
-            override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
-                if (newState == BluetoothProfile.STATE_DISCONNECTED && !cont.isCompleted) {
-                    Log.d("PolarVendorApi", "Temp GATT STATE_DISCONNECTED for ${device.address}")
-                    Handler(Looper.getMainLooper()).postDelayed({
-                        try { gatt.close() } catch (_: Exception) { }
-                        if (!cont.isCompleted) cont.resumeWith(Result.success(true))
-                    }, 200)
-                }
-            }
-        })
-
-        if (gatt == null) {
-            Log.e("PolarVendorApi", "connectGatt returned null for ${device.address}")
-            cont.resumeWith(Result.success(false))
-            return@suspendCancellableCoroutine
+    private fun removeBond(device: BluetoothDevice) {
+        try {
+            device::class.java.getMethod("removeBond").invoke(device)
+            Log.d("PolarVendorApi", "removeBond called for ${device.address}")
+        } catch (e: Exception) {
+            Log.e("PolarVendorApi", "removeBond failed for ${device.address}", e)
         }
-
-        cont.invokeOnCancellation {
-            try { gatt.close() } catch (_: Exception) { }
-        }
-
-        gatt.disconnect()
-        Log.d("PolarVendorApi", "disconnect() called on temp GATT for ${device.address}")
-
-        Handler(Looper.getMainLooper()).postDelayed({
-            if (!cont.isCompleted) {
-                Log.w("PolarVendorApi", "Timeout waiting for STATE_DISCONNECTED for ${device.address}")
-                try { gatt.close() } catch (_: Exception) { }
-                cont.resumeWith(Result.success(false))
-            }
-        }, 3000)
     }
 
     override fun getAvailableDataTypes(deviceId: String): Set<SensorDataType> {

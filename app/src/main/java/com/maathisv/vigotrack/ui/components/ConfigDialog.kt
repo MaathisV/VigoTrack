@@ -8,6 +8,7 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -126,6 +127,9 @@ fun ConfigDialog(
     onDismiss: () -> Unit,
     onPickLogFolder: () -> Unit
 ) {
+    LaunchedEffect(show) {
+        if (show) homeViewModel.startScanning()
+    }
     if (!show) return
     val connectionState by homeViewModel.connectionState.collectAsState()
     val deviceConnectionStates by homeViewModel.deviceConnectionStates.collectAsState()
