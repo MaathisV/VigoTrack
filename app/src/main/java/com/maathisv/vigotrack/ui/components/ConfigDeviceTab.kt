@@ -44,6 +44,7 @@ fun ConfigDeviceTab(
     connectingId: String?,
     onConnect: (Sensor) -> Unit,
     onDisconnect: (String) -> Unit,
+    onForget: (String) -> Unit,
     onRenameSensor: (String, String) -> Unit,
     availableSettings: Map<String, Map<String, Set<Int>>> = emptyMap(),
     selectedSettings: Map<String, Pair<Int, Int>> = emptyMap(),
@@ -98,8 +99,14 @@ fun ConfigDeviceTab(
                                         }
                                     }
                                 } else {
-                                    Button(onClick = { onConnect(sensor) }) {
-                                        Text("Connecter")
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Button(onClick = { onConnect(sensor) }) {
+                                            Text("Connecter")
+                                        }
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        TextButton(onClick = { onForget(sensor.deviceId) }) {
+                                            Text("Oublier", color = MaterialTheme.colorScheme.error)
+                                        }
                                     }
                                 }
                             },

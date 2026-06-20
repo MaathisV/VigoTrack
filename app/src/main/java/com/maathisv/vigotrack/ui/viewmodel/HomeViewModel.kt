@@ -229,6 +229,14 @@ class HomeViewModel(
         }
     }
 
+    fun forgetDevice(deviceId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            sensorPatientLinks.value.filter { it.sensorId == deviceId }
+                .forEach { sensorPatientLinkDataSource.deleteLink(it) }
+            sensorRepo.forgetDevice(deviceId)
+        }
+    }
+
     fun renameSensor(deviceId: String, newName: String) {
         sensorRepo.updateSensorDisplayName(deviceId, newName)
     }

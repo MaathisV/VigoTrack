@@ -40,6 +40,7 @@ fun ConfigDialog(
     onDismiss: () -> Unit,
     onConnect: (Sensor) -> Unit,
     onDisconnect: (String) -> Unit,
+    onForget: (String) -> Unit,
     onRenameSensor: (String, String) -> Unit,
     onAddPatient: (String) -> Unit,
     onDeletePatient: (Patient) -> Unit,
@@ -85,6 +86,7 @@ fun ConfigDialog(
                     connectingId = connectingId,
                     onConnect = onConnect,
                     onDisconnect = onDisconnect,
+                    onForget = onForget,
                     onRenameSensor = onRenameSensor,
                     availableSettings = availableSettings,
                     selectedSettings = selectedSettings,
@@ -126,7 +128,8 @@ fun ConfigDialog(
     homeViewModel: HomeViewModel,
     show: Boolean,
     onDismiss: () -> Unit,
-    onPickLogFolder: () -> Unit
+    onPickLogFolder: () -> Unit,
+    onForget: (String) -> Unit = { homeViewModel.forgetDevice(it) }
 ) {
     LaunchedEffect(show) {
         if (show) homeViewModel.startScanning()
@@ -165,6 +168,7 @@ fun ConfigDialog(
         onDismiss = onDismiss,
         onConnect = { homeViewModel.connectToDevice(it) },
         onDisconnect = { homeViewModel.disconnectFromDevice(it) },
+        onForget = onForget,
         onRenameSensor = { deviceId, name -> homeViewModel.renameSensor(deviceId, name) },
         onAddPatient = { name -> homeViewModel.addPatient(name) },
         onDeletePatient = { patient -> homeViewModel.deletePatient(patient) },

@@ -328,6 +328,19 @@ class SensorRepository(
         }
     }
 
+    suspend fun forgetDevice(deviceId: String) {
+        Log.d(tag, "Forgetting device: $deviceId")
+        requestDisconnect(deviceId)
+        stopActivityStreaming(deviceId)
+        _connectedDeviceIds.update { it - deviceId }
+        _availableStreamDataTypes.update { it - deviceId }
+        _deviceConnectionStates.update { it - deviceId }
+        _liveData.update { it - deviceId }
+        previousHr.remove(deviceId)
+        dataSource.deleteSensor(deviceId)
+        Log.d(tag, "Device forgotten: $deviceId")
+    }
+
     private fun getVendorForDevice(deviceId: String): String? {
         val saved = dataSource.getSavedSensors().let { flow ->
             runBlocking {
