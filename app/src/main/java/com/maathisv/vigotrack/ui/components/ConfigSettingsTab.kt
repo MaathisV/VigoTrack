@@ -16,6 +16,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -63,7 +64,7 @@ fun ConfigSettingsTab(
         Spacer(modifier = Modifier.height(12.dp))
 
         OutlinedTextField(
-            value = if (currentLogUri.isBlank()) "Aucun dossier sélectionné" else currentLogUri,
+            value = currentLogUri.ifBlank { "Aucun dossier sélectionné" },
             onValueChange = {},
             readOnly = true,
             label = { Text("URI du dossier actuel") },
@@ -94,6 +95,28 @@ fun ConfigSettingsTab(
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        val templateSafe = remember(namingTemplate) {
+            listOf("{activity_id}", "{datetime}", "{timestamp}", "{sensor}")
+                .any { namingTemplate.contains(it) }
+        }
+
+        if (!templateSafe) {
+            Surface(
+                color = MaterialTheme.colorScheme.errorContainer,
+                shape = MaterialTheme.shapes.small,
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+            ) {
+                Text(
+                    text = "Ce modèle risque de mélanger les données de différentes sessions. Ajoutez {activity_id}, {datetime}, {timestamp} ou {sensor}.",
+                    modifier = Modifier.padding(8.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(8.dp))
 
@@ -157,6 +180,7 @@ fun ConfigSettingsTab(
                     Text("{patient} - Nom du patient")
                     Text("{category} - Catégorie d'activité (BILAN / ACTIVITÉ)")
                     Text("{activity} - Type d'activité (ex. MARCHE, TDM6)")
+                    Text("{activity_id} - Identifiant unique de l'activité")
                     Text("{sensor} - Identifiant du capteur")
                     Text("{device} - Alias de {sensor}")
                     Text("{tag} - Type de flux de données (HR, PPI, ACC, ECG)")
@@ -166,7 +190,7 @@ fun ConfigSettingsTab(
                     Text("{timestamp} - Timestamp Unix (ms)")
                     Text("")
                     Text("Utilisez / dans votre modèle pour créer des niveaux de dossiers.")
-                    Text("Défaut : {stage}/{patient}/{category}/{activity}_{datetime}/{sensor}_{tag}")
+                    Text("Défaut : {stage}/{patient}/{category}/{activity_id}_{activity}/{sensor}_{datetime}_{tag}")
                 }
             },
             confirmButton = {

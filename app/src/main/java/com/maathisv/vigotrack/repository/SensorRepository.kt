@@ -45,9 +45,9 @@ class SensorRepository(
     private val dataSource: SensorDataSource,
     private val vendorRegistry: VendorApiRegistry
 ) {
-    private val TAG = "VigoTrack"
+    private val tag = "VigoTrack"
     private val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
-        Log.e(TAG, "Unhandled error in repository scope", throwable)
+        Log.e(tag, "Unhandled error in repository scope", throwable)
     }
     private val repositoryScope = CoroutineScope(Dispatchers.Main + SupervisorJob() + exceptionHandler)
 
@@ -77,6 +77,7 @@ class SensorRepository(
     private val _availableStreamDataTypes = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
     val availableStreamDataTypes: StateFlow<Map<String, Set<String>>> = _availableStreamDataTypes.asStateFlow()
 
+    private val connectingLock = mutableSetOf<String>()
     private val activeStreams = mutableSetOf<StreamIdentifier>()
     private val previousHr = mutableMapOf<String, Int>()
 
@@ -88,7 +89,6 @@ class SensorRepository(
 
     init {
         observeVendorEvents()
-        autoReconnectToSavedDevices()
         registerBleAclReceiver()
     }
 
@@ -130,7 +130,7 @@ class SensorRepository(
                         }
                     }
                     is SensorEvent.Error -> {
-                        Log.e(TAG, "Vendor error for ${event.deviceId}", event.error)
+                        Log.e(tag, "Vendor error for ${event.deviceId}", event.error)
                     }
                 }
             }
@@ -150,44 +150,45 @@ class SensorRepository(
         }
     }
 
-    private fun autoReconnectToSavedDevices() {
-        repositoryScope.launch {
-            dataSource.getSavedSensors().first().forEach { saved ->
-                Log.d(TAG, "Auto-reconnecting to saved device: ${saved.deviceId} (${saved.name})")
-                connectWithRetry(saved.deviceId, saved.vendor, saved.address)
-            }
-        }
-    }
-
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     private suspend fun connectWithRetry(deviceId: String, vendorName: String = "polar", address: String? = null, maxRetries: Int = 3) {
-        if (address != null && isDeviceSystemConnected(address) && deviceId !in _connectedDeviceIds.value) {
-            Log.d(TAG, "Forcing clean reconnection for $deviceId")
-            _deviceConnectionStates.update { it + (deviceId to ConnectionState.CONNECTING) }
-            try {
-                vendorRegistry.disconnectFromDevice(deviceId, vendorName)
-                delay(500)
-                vendorRegistry.connectToDevice(deviceId, vendorName)
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to re-establish session for $deviceId", e)
-                _deviceConnectionStates.update { it + (deviceId to ConnectionState.NOT_CONNECTED) }
-            }
+        if (!connectingLock.add(deviceId)) {
+            Log.d(tag, "Connection already in progress for $deviceId, skipping")
             return
         }
-        _deviceConnectionStates.update { it + (deviceId to ConnectionState.CONNECTING) }
-        repeat(maxRetries) { attempt ->
-            try {
-                vendorRegistry.connectToDevice(deviceId, vendorName)
+        try {
+            if (address != null && isDeviceSystemConnected(address) && deviceId !in _connectedDeviceIds.value) {
+                Log.d(tag, "Force-reconnecting to system-connected device: $deviceId")
+                _deviceConnectionStates.update { it + (deviceId to ConnectionState.CONNECTING) }
+                try {
+                    val dropped = vendorRegistry.forceReconnect(deviceId, address, vendorName)
+                    if (!dropped) {
+                        Log.e(tag, "forceReconnect returned false for $deviceId, falling back")
+                        vendorRegistry.connectToDevice(deviceId, vendorName)
+                    }
+                } catch (e: Exception) {
+                    Log.e(tag, "Failed to re-establish session for $deviceId", e)
+                    _deviceConnectionStates.update { it + (deviceId to ConnectionState.NOT_CONNECTED) }
+                }
                 return
-            } catch (e: Exception) {
-                if (attempt < maxRetries - 1) {
-                    Log.w(TAG, "Retry $attempt for $deviceId: ${e.message}")
-                    delay(2000)
+            }
+            _deviceConnectionStates.update { it + (deviceId to ConnectionState.CONNECTING) }
+            repeat(maxRetries) { attempt ->
+                try {
+                    vendorRegistry.connectToDevice(deviceId, vendorName)
+                    return
+                } catch (e: Exception) {
+                    if (attempt < maxRetries - 1) {
+                        Log.w(tag, "Retry $attempt for $deviceId: ${e.message}")
+                        delay(2000)
+                    }
                 }
             }
+            _deviceConnectionStates.update { it + (deviceId to ConnectionState.NOT_CONNECTED) }
+            Log.e(tag, "Could not reconnect to $deviceId after $maxRetries attempts")
+        } finally {
+            connectingLock.remove(deviceId)
         }
-        _deviceConnectionStates.update { it + (deviceId to ConnectionState.NOT_CONNECTED) }
-        Log.e(TAG, "Could not reconnect to $deviceId after $maxRetries attempts")
     }
 
     @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
@@ -275,10 +276,7 @@ class SensorRepository(
     }
 
     private fun registerBleAclReceiver() {
-        val filter = IntentFilter().apply {
-            addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
-            addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
-        }
+        val filter = IntentFilter(BluetoothDevice.ACTION_ACL_CONNECTED)
         context.applicationContext.registerReceiver(bleAclReceiver, filter)
     }
 
@@ -286,9 +284,8 @@ class SensorRepository(
         override fun onReceive(context: Context, intent: Intent) {
             val device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
             val macAddress = device?.address ?: return
-            when (intent.action) {
-                BluetoothDevice.ACTION_ACL_CONNECTED -> handleSystemBleReconnection(macAddress)
-                BluetoothDevice.ACTION_ACL_DISCONNECTED -> handleSystemBleDisconnection(macAddress)
+            if (intent.action == BluetoothDevice.ACTION_ACL_CONNECTED) {
+                handleSystemBleReconnection(macAddress)
             }
         }
     }
@@ -298,25 +295,8 @@ class SensorRepository(
             val knownDevices = dataSource.getSavedSensors().first()
             val saved = knownDevices.firstOrNull { it.deviceId == macAddress || it.address == macAddress }
             if (saved != null && saved.deviceId !in _connectedDeviceIds.value) {
-                Log.d(TAG, "System BLE reconnection detected for: ${saved.deviceId}")
+                Log.d(tag, "System BLE reconnection detected for: ${saved.deviceId}")
                 connectWithRetry(saved.deviceId, saved.vendor, saved.address)
-            }
-        }
-    }
-
-    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
-    private fun handleSystemBleDisconnection(macAddress: String) {
-        repositoryScope.launch {
-            val saved = dataSource.getSavedSensors().first().firstOrNull {
-                it.deviceId == macAddress || it.address == macAddress
-            }
-            if (saved == null || saved.deviceId !in _connectedDeviceIds.value) return@launch
-            delay(2000)
-            if (!isDeviceSystemConnected(saved.address)) {
-                Log.d(TAG, "System BLE disconnection confirmed for: ${saved.deviceId}")
-                _connectedDeviceIds.update { it - saved.deviceId }
-                _availableStreamDataTypes.update { it - saved.deviceId }
-                _deviceConnectionStates.update { it - saved.deviceId }
             }
         }
     }
@@ -346,6 +326,19 @@ class SensorRepository(
                 vendorRegistry.disconnectFromDevice(deviceId, vendor)
             }
         }
+    }
+
+    suspend fun forgetDevice(deviceId: String) {
+        Log.d(tag, "Forgetting device: $deviceId")
+        requestDisconnect(deviceId)
+        stopActivityStreaming(deviceId)
+        _connectedDeviceIds.update { it - deviceId }
+        _availableStreamDataTypes.update { it - deviceId }
+        _deviceConnectionStates.update { it - deviceId }
+        _liveData.update { it - deviceId }
+        previousHr.remove(deviceId)
+        dataSource.deleteSensor(deviceId)
+        Log.d(tag, "Device forgotten: $deviceId")
     }
 
     private fun getVendorForDevice(deviceId: String): String? {
@@ -378,18 +371,22 @@ class SensorRepository(
         return _availableStreamDataTypes.value[deviceId] ?: emptySet()
     }
 
-    suspend fun getSupportedSettings(deviceId: String, feature: String): Any? = null
+    suspend fun getAvailableSettings(deviceId: String, feature: String): Map<String, Set<Int>>? {
+        val vendor = getVendorForDevice(deviceId) ?: return null
+        val dataType = try { SensorDataType.valueOf(feature) } catch (_: IllegalArgumentException) { return null }
+        return vendorRegistry.getAvailableSettings(deviceId, vendor, dataType)
+    }
 
     fun startFeatureStream(deviceId: String, feature: String, settings: Any? = null) {
         val available = _availableStreamDataTypes.value[deviceId] ?: emptySet()
         if (feature !in available) {
-            Log.w(TAG, "Cannot start $feature yet. $deviceId is not ready.")
+            Log.w(tag, "Cannot start $feature yet. $deviceId is not ready.")
             return
         }
 
         val id = StreamIdentifier(deviceId, feature)
         if (id in activeStreams) {
-            Log.d(TAG, "Stream $feature already active for $deviceId. Skipping.")
+            Log.d(tag, "Stream $feature already active for $deviceId. Skipping.")
             return
         }
 
@@ -398,16 +395,7 @@ class SensorRepository(
 
         vendorRegistry.startStreaming(deviceId, vendor, dataType, settings)
         activeStreams.add(id)
-        Log.d(TAG, "Started streaming $feature for $deviceId via $vendor")
-    }
-
-    suspend fun startActivityStreaming(session: ActivitySession) {
-        session.links.forEach { link ->
-            link.featuresToTrack.forEach { feature ->
-                startFeatureStream(link.sensorId, feature)
-                delay(300)
-            }
-        }
+        Log.d(tag, "Started streaming $feature for $deviceId via $vendor")
     }
 
     fun stopActivityStreaming(deviceId: String) {

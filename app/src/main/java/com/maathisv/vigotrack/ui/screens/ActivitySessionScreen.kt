@@ -2,28 +2,20 @@ package com.maathisv.vigotrack.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
-import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -57,6 +49,7 @@ fun ActivitySessionScreen(
     onTypeChanged: (String) -> Unit = {}
 ) {
     val allActivities by homeViewModel.activities.collectAsState(initial = emptyList())
+    val allActivityTypes by homeViewModel.activityTypes.collectAsState()
     val allLiveData by homeViewModel.sensorLiveData.collectAsState()
     val connectedSensors by homeViewModel.connectedDevicesList.collectAsState()
     val preLinks by homeViewModel.sensorPatientLinks.collectAsState()
@@ -65,10 +58,23 @@ fun ActivitySessionScreen(
 
     val activity = allActivities.find { it.id == activityId }
 
-    val bilanTypes = ActivityType.entries.filter { it.category == ActivityCategory.BILAN }
-    val activiteTypes = ActivityType.entries.filter { it.category == ActivityCategory.ACTIVITE }
-
     var currentType by remember(activity) { mutableStateOf(activity?.activityType) }
+
+    val stageActivities = remember(allActivities, activity?.stageId) {
+        activity?.stageId?.let { sid -> allActivities.filter { it.stageId == sid } } ?: emptyList()
+    }
+
+    val bilanTypes = remember(allActivityTypes, stageActivities) {
+        val fromTable = allActivityTypes.filter { it.category == ActivityCategory.BILAN }
+        val fromStage = stageActivities.map { it.activityType }.filter { ActivityType.fromName(it.name) == null }
+        (fromTable + fromStage).distinctBy { it.name }
+    }
+
+    val activiteTypes = remember(allActivityTypes, stageActivities) {
+        val fromTable = allActivityTypes.filter { it.category == ActivityCategory.ACTIVITE }
+        val fromStage = stageActivities.map { it.activityType }.filter { ActivityType.fromName(it.name) == null }
+        (fromTable + fromStage).distinctBy { it.name }
+    }
 
     val checkedSensorIds = remember { mutableStateMapOf<String, Boolean>() }
     var compactView by remember { mutableStateOf(false) }
@@ -94,7 +100,7 @@ fun ActivitySessionScreen(
         topBar = {
             AppTopBar(
                 title = if (activity?.isRunning == true) "En cours"
-                        else currentType?.displayName ?: "Session",
+                        else currentType?.let { ct -> allActivityTypes.find { it.name == ct.name }?.displayName ?: ct.displayName } ?: "Session",
                 onBack = onBack
             )
         }

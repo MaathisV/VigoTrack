@@ -5,7 +5,7 @@ import com.maathisv.vigotrack.models.ActivitySession
 import com.maathisv.vigotrack.models.ActivityType
 import java.util.UUID
 
-class ActivityRepository(private val dataSource: ActivityDataSource) {
+class ActivityRepository(val dataSource: ActivityDataSource) {
 
     // Source of truth (Mapping happens inside the DataSource implementation)
     val allActivities = dataSource.getAllActivities()
@@ -57,5 +57,9 @@ class ActivityRepository(private val dataSource: ActivityDataSource) {
 
     suspend fun removeLinkFromActivity(activityId: String, sensorId: String, patientId: Long?) {
         dataSource.deleteLink(activityId, sensorId, patientId)
+    }
+
+    suspend fun deleteActivitiesByStage(stageId: Long) {
+        dataSource.deleteActivitiesByStage(stageId)
     }
 }

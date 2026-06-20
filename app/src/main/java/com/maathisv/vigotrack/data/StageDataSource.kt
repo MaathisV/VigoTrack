@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.map
 interface StageDataSource {
     fun getAllStages(): Flow<List<Stage>>
     suspend fun insertStage(stage: Stage): Long
+    suspend fun updateStage(stage: Stage)
     suspend fun deleteStage(stage: Stage)
 }
 
@@ -21,6 +22,10 @@ class RoomStageDataSource(private val dao: StageDao) : StageDataSource {
 
     override suspend fun insertStage(stage: Stage): Long {
         return dao.insertStage(stage.toEntity())
+    }
+
+    override suspend fun updateStage(stage: Stage) {
+        dao.updateStage(stage.toEntity())
     }
 
     override suspend fun deleteStage(stage: Stage) {

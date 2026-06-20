@@ -23,12 +23,12 @@ const val ACTION_STOP_STREAMS = "com.maathisv.vigotrack.STOP_STREAMS"
 const val EXTRA_SENSOR_IDS = "extra_sensor_ids"
 const val EXTRA_ACTIVITY_NAME = "extra_activity_name"
 const val EXTRA_ACTIVITY_CATEGORY = "extra_activity_category"
-const val EXTRA_PATIENT_NAME = "extra_patient_name"
 const val EXTRA_PATIENT_NAMES = "extra_patient_names"
 const val EXTRA_STAGE_NAME = "extra_stage_name"
 const val EXTRA_SESSION_DATE = "extra_session_date"
+const val EXTRA_ACTIVITY_ID = "extra_activity_id"
 
-const val DEFAULT_TEMPLATE = "{stage}/{patient}/{category}/{activity}_{datetime}/{sensor}_{tag}"
+const val DEFAULT_TEMPLATE = "{stage}/{patient}/{category}/{activity_id}_{activity}/{sensor}_{datetime}_{tag}"
 
 class SensorService : LifecycleService() {
     private val loggers = mutableMapOf<String, DataLogger>()
@@ -51,6 +51,7 @@ class SensorService : LifecycleService() {
                 val activityCategory = intent.getStringExtra(EXTRA_ACTIVITY_CATEGORY) ?: ""
                 val stageName = intent.getStringExtra(EXTRA_STAGE_NAME) ?: "NoStage"
                 val sessionDate = intent.getLongExtra(EXTRA_SESSION_DATE, System.currentTimeMillis())
+                val activityId = intent.getStringExtra(EXTRA_ACTIVITY_ID) ?: ""
 
                 val sdfDate = SimpleDateFormat("yyyy-MM-dd", Locale.US)
                 val sdfTime = SimpleDateFormat("HH-mm-ss", Locale.US)
@@ -79,7 +80,8 @@ class SensorService : LifecycleService() {
                             "date" to dateStr,
                             "time" to timeStr,
                             "datetime" to "${dateStr}_${timeStr}",
-                            "timestamp" to sessionDate.toString()
+                            "timestamp" to sessionDate.toString(),
+                            "activity_id" to activityId
                         )
                         loggers[sensorId] = DataLogger(
                             applicationContext, uriString.toUri(), template, staticValues
@@ -126,7 +128,7 @@ class SensorService : LifecycleService() {
         return NotificationCompat.Builder(this, channelId)
             .setContentTitle("VigoTrack Actif")
             .setContentText("Surveillance des capteurs en arrière-plan…")
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.vigotrack_icon_foreground)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()

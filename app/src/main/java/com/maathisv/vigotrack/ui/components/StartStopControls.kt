@@ -23,12 +23,7 @@ fun StartStopControls(activity: ActivitySession, homeViewModel: HomeViewModel, c
         horizontalArrangement = Arrangement.Center
     ) {
         Button(
-            onClick = {
-                when (activity.status) {
-                    ActivityStatus.COMPLETED -> homeViewModel.resumeActivity(activity)
-                    else -> homeViewModel.toggleSession(activity, checkedKeys)
-                }
-            },
+            onClick = { homeViewModel.toggleSession(activity, checkedKeys) },
             colors = when {
                 activity.isRunning -> ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 activity.status == ActivityStatus.COMPLETED -> ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)

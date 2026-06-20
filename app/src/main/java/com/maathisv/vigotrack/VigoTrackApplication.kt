@@ -2,8 +2,10 @@ package com.maathisv.vigotrack
 
 import android.app.Application
 import com.maathisv.vigotrack.data.ActivityDataSource
+import com.maathisv.vigotrack.data.ActivityTypeDataSource
 import com.maathisv.vigotrack.data.PatientDataSource
 import com.maathisv.vigotrack.data.RoomActivityDataSource
+import com.maathisv.vigotrack.data.RoomActivityTypeDataSource
 import com.maathisv.vigotrack.data.RoomPatientDataSource
 import com.maathisv.vigotrack.data.RoomSensorDataSource
 import com.maathisv.vigotrack.data.RoomSensorPatientLinkDataSource
@@ -35,7 +37,7 @@ class VigoTrackApplication : Application() {
     }
     val sensorRepository by lazy { SensorRepository(this, sensorDataSource, vendorRegistry) }
 
-    private val activityDataSource: ActivityDataSource by lazy {
+    val activityDataSource: ActivityDataSource by lazy {
         RoomActivityDataSource(database.activityDao())
     }
     val activityRepository by lazy { ActivityRepository(activityDataSource) }
@@ -50,5 +52,9 @@ class VigoTrackApplication : Application() {
 
     val stageDataSource: StageDataSource by lazy {
         RoomStageDataSource(database.stageDao())
+    }
+
+    val activityTypeDataSource: ActivityTypeDataSource by lazy {
+        RoomActivityTypeDataSource(database.activityTypeDao())
     }
 }

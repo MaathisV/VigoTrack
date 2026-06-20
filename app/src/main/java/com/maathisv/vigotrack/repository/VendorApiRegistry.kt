@@ -22,6 +22,10 @@ class VendorApiRegistry(
         findByVendorName(vendorName)?.connectToDevice(deviceId)
     }
 
+    suspend fun forceReconnect(deviceId: String, address: String, vendorName: String): Boolean {
+        return findByVendorName(vendorName)?.forceReconnect(deviceId, address) ?: false
+    }
+
     fun disconnectFromDevice(deviceId: String, vendorName: String) {
         findByVendorName(vendorName)?.disconnectFromDevice(deviceId)
     }
@@ -30,8 +34,8 @@ class VendorApiRegistry(
         vendors.forEach { it.onForegroundEntered() }
     }
 
-    fun getAvailableDataTypes(deviceId: String, vendorName: String): Set<SensorDataType> =
-        findByVendorName(vendorName)?.getAvailableDataTypes(deviceId) ?: emptySet()
+    suspend fun getAvailableSettings(deviceId: String, vendorName: String, dataType: SensorDataType): Map<String, Set<Int>>? =
+        findByVendorName(vendorName)?.getAvailableSettings(deviceId, dataType)
 
     fun startStreaming(deviceId: String, vendorName: String, dataType: SensorDataType, settings: Any? = null) {
         findByVendorName(vendorName)?.startStreaming(deviceId, dataType, settings)

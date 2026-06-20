@@ -56,15 +56,6 @@ fun StageDetailScreen(
 
     var showConfigDialog by remember { mutableStateOf(false) }
 
-    val connectionState by homeViewModel.connectionState.collectAsState()
-    val deviceConnectionStates by homeViewModel.deviceConnectionStates.collectAsState()
-    val scannedDevices by homeViewModel.scannedDevices.collectAsState()
-    val connectedDevicesList by homeViewModel.connectedDevicesList.collectAsState()
-    val connectingId by homeViewModel.isConnectingToId.collectAsState()
-    val patients by homeViewModel.patients.collectAsState()
-    val sensorPatientLinks by homeViewModel.sensorPatientLinks.collectAsState()
-    val currentLogUri by homeViewModel.currentLogUri.collectAsState()
-    val namingTemplate by homeViewModel.namingTemplate.collectAsState()
     val context = LocalContext.current
 
     val folderPickerLauncher = rememberLauncherForActivityResult(
@@ -104,44 +95,18 @@ fun StageDetailScreen(
                     homeViewModel.createActivityInStage(newId, stage.id, ActivityType.MARCHE)
                     onActivityClick(newId)
                 },
-                onMarkStale = { activityId -> homeViewModel.markActivityAsStale(activityId) }
+                onMarkStale = { activityId -> homeViewModel.markActivityAsStale(activityId) },
+                onUnmarkStale = { activityId -> homeViewModel.unmarkActivityAsStale(activityId) }
             )
         }
     }
 
-    if (showConfigDialog) {
-        val showFeatures by homeViewModel.showFeatures.collectAsState()
-        val logFeatures by homeViewModel.logFeatures.collectAsState()
-        ConfigDialog(
-            scannedDevices = scannedDevices,
-            connectedDevicesList = connectedDevicesList,
-            deviceConnectionStates = deviceConnectionStates,
-            connectingId = connectingId,
-            patients = patients,
-            sensorPatientLinks = sensorPatientLinks,
-            currentLogUri = currentLogUri,
-            namingTemplate = namingTemplate,
-            showFeatures = showFeatures,
-            logFeatures = logFeatures,
-            onDismiss = { showConfigDialog = false },
-            onConnect = { sensor -> homeViewModel.connectToDevice(sensor) },
-            onDisconnect = { id -> homeViewModel.disconnectFromDevice(id) },
-            onRenameSensor = { deviceId, name -> homeViewModel.renameSensor(deviceId, name) },
-            onAddPatient = { name -> homeViewModel.addPatient(name) },
-            onDeletePatient = { patient -> homeViewModel.deletePatient(patient) },
-            onPickLogFolder = { folderPickerLauncher.launch(null) },
-            onTemplateChange = { homeViewModel.updateNamingTemplate(it) },
-            onResetTemplate = { homeViewModel.resetNamingTemplate() },
-            onCreateSensorPatientLink = { patientId, sensorId, features ->
-                homeViewModel.createSensorPatientLink(patientId, sensorId, features)
-            },
-            onDeleteSensorPatientLink = { link ->
-                homeViewModel.deleteSensorPatientLink(link)
-            },
-            onToggleShowFeature = { feature -> homeViewModel.toggleShowFeature(feature) },
-            onToggleLogFeature = { feature -> homeViewModel.toggleLogFeature(feature) }
-        )
-    }
+    ConfigDialog(
+        homeViewModel = homeViewModel,
+        show = showConfigDialog,
+        onDismiss = { showConfigDialog = false },
+        onPickLogFolder = { folderPickerLauncher.launch(null) }
+    )
 }
 
 @Composable
@@ -151,7 +116,8 @@ private fun StageDetailContent(
     onBilanClick: () -> Unit,
     onActivityClick: (String) -> Unit,
     onRecordClick: () -> Unit,
-    onMarkStale: (String) -> Unit = {}
+    onMarkStale: (String) -> Unit = {},
+    onUnmarkStale: (String) -> Unit = {}
 ) {
     val dateFormat = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()) }
     val dayFormat = remember { SimpleDateFormat("EEEE dd MMMM", Locale.getDefault()) }
@@ -208,7 +174,7 @@ private fun StageDetailContent(
                     )
                 }
                 items(dayActivities, key = { it.id }) { session ->
-                    ActivityCard(session = session, onClick = { onActivityClick(session.id) }, onMarkStale = onMarkStale)
+                    ActivityCard(session = session, onClick = { onActivityClick(session.id) }, onMarkStale = onMarkStale, onUnmarkStale = onUnmarkStale)
                 }
             }
         }

@@ -71,7 +71,8 @@ class MainActivity : ComponentActivity() {
                     sensorRepo = app.sensorRepository,
                     patientDataSource = app.patientDataSource,
                     sensorPatientLinkDataSource = app.sensorPatientLinkDataSource,
-                    stageDataSource = app.stageDataSource
+                    stageDataSource = app.stageDataSource,
+                    activityTypeDataSource = app.activityTypeDataSource
                 )
             }
         }

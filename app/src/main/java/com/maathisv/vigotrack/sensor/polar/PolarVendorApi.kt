@@ -1,7 +1,11 @@
 package com.maathisv.vigotrack.sensor.polar
 
+import android.Manifest
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.util.Log
+import androidx.annotation.RequiresPermission
 import com.maathisv.vigotrack.sensor.api.ScannedDevice
 import com.maathisv.vigotrack.sensor.api.SensorDataType
 import com.maathisv.vigotrack.sensor.api.SensorEvent
@@ -14,12 +18,13 @@ import com.polar.sdk.api.errors.PolarDeviceNotFound
 import com.polar.sdk.api.model.PolarDeviceInfo
 import com.polar.sdk.api.model.PolarHealthThermometerData
 import com.polar.sdk.api.model.PolarSensorSetting
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.yield
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -57,6 +62,8 @@ class PolarVendorApi(
     override val events: Flow<SensorEvent> = _events.asSharedFlow()
 
     private val activeStreamJobs = mutableMapOf<Pair<String, SensorDataType>, Job>()
+    private val gattReadyDevices = mutableSetOf<String>()
+    private val pendingStreams = mutableMapOf<String, MutableList<Pair<SensorDataType, Any?>>>()
 
     init {
         setupCallbacks()
@@ -88,42 +95,50 @@ class PolarVendorApi(
 
             override fun bleSdkFeatureReady(identifier: String, feature: PolarBleApi.PolarBleSdkFeature) {
                 Log.d("PolarVendorApi", "Feature ready: $feature for $identifier")
-                if (feature == PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_DEVICE_TIME_SETUP) {
-                    scope.launch {
-                        try {
-                            api.setLocalTime(identifier, LocalDateTime.now())
-                            Log.d("PolarVendorApi", "Time synced for $identifier")
-                        } catch (e: Exception) {
-                            Log.w("PolarVendorApi", "Time sync failed for $identifier", e)
+                when (feature) {
+                    PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_DEVICE_TIME_SETUP -> {
+                        scope.launch {
+                            try {
+                                api.setLocalTime(identifier, LocalDateTime.now())
+                                Log.d("PolarVendorApi", "Time synced for $identifier")
+                            } catch (e: Exception) {
+                                Log.w("PolarVendorApi", "Time sync failed for $identifier", e)
+                            }
                         }
                     }
+                    PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_ONLINE_STREAMING -> {
+                        gattReadyDevices.add(identifier)
+                        scope.launch {
+                            try {
+                                val types = api.getAvailableOnlineStreamDataTypes(identifier)
+                                val mapped = types.mapNotNull { it.toSensorDataType() }.toSet()
+                                _events.tryEmit(SensorEvent.FeaturesReady(identifier, mapped))
+                            } catch (e: Exception) {
+                                Log.e("PolarVendorApi", "Failed to get stream types", e)
+                            }
+                            yield()
+                            pendingStreams.remove(identifier)?.forEach { (dataType, settings) ->
+                                startStreamNow(identifier, dataType, settings)
+                            }
+                        }
+                    }
+                    PolarBleApi.PolarBleSdkFeature.FEATURE_HR -> {
+                        scope.launch {
+                            try {
+                                val types = api.getAvailableHRServiceDataTypes(identifier)
+                                val mapped = types.mapNotNull { it.toSensorDataType() }.toSet()
+                                _events.tryEmit(SensorEvent.FeaturesReady(identifier, mapped))
+                            } catch (e: Exception) {
+                                Log.e("PolarVendorApi", "Failed to get HR types", e)
+                            }
+                        }
+                    }
+                    else -> {}
                 }
             }
 
             override fun bleSdkFeaturesReadiness(identifier: String, ready: List<PolarBleApi.PolarBleSdkFeature>, unavailable: List<PolarBleApi.PolarBleSdkFeature>) {
-                Log.d("PolarVendorApi", "Features readiness for $identifier. Ready: $ready")
-                if (ready.contains(PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_ONLINE_STREAMING)) {
-                    scope.launch {
-                        try {
-                            val types = api.getAvailableOnlineStreamDataTypes(identifier)
-                            val mapped = types.mapNotNull { it.toSensorDataType() }.toSet()
-                            _events.tryEmit(SensorEvent.FeaturesReady(identifier, mapped))
-                        } catch (e: Exception) {
-                            Log.e("PolarVendorApi", "Failed to get stream types", e)
-                        }
-                    }
-                }
-                if (ready.contains(PolarBleApi.PolarBleSdkFeature.FEATURE_HR)) {
-                    scope.launch {
-                        try {
-                            val types = api.getAvailableHRServiceDataTypes(identifier)
-                            val mapped = types.mapNotNull { it.toSensorDataType() }.toSet()
-                            _events.tryEmit(SensorEvent.FeaturesReady(identifier, mapped))
-                        } catch (e: Exception) {
-                            Log.e("PolarVendorApi", "Failed to get HR types", e)
-                        }
-                    }
-                }
+                Log.d("PolarVendorApi", "Features readiness for $identifier. Ready: $ready, Unavailable: $unavailable")
             }
 
             override fun disInformationReceived(identifier: String, disInfo: DisInfo) {
@@ -152,16 +167,60 @@ class PolarVendorApi(
     override fun disconnectFromDevice(deviceId: String) {
         activeStreamJobs.filterKeys { it.first == deviceId }.values.forEach { it.cancel() }
         activeStreamJobs.keys.filter { it.first == deviceId }.forEach { activeStreamJobs.remove(it) }
+        pendingStreams.remove(deviceId)
+        gattReadyDevices.remove(deviceId)
         api.disconnectFromDevice(deviceId)
+    }
+
+    override suspend fun forceReconnect(deviceId: String, address: String): Boolean {
+        Log.d("PolarVendorApi", "forceReconnect: $deviceId ($address)")
+        disconnectFromDevice(deviceId)
+        val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
+        val device = bluetoothManager.adapter?.getRemoteDevice(address) ?: return false
+        // Start SDK scan FIRST so it's running when the bond breaks
+        connectToDevice(deviceId)
+        // THEN remove the OS bond — device advertises, the running scan catches it
+        removeBond(device)
+        return true
+    }
+
+    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
+    private fun removeBond(device: BluetoothDevice) {
+        try {
+            device::class.java.getMethod("removeBond").invoke(device)
+            Log.d("PolarVendorApi", "removeBond called for ${device.address}")
+        } catch (e: Exception) {
+            Log.e("PolarVendorApi", "removeBond failed for ${device.address}", e)
+        }
     }
 
     override fun getAvailableDataTypes(deviceId: String): Set<SensorDataType> {
         return SensorDataType.entries.filter { it.toPolarDeviceDataType() != null }.toSet()
     }
 
+    override suspend fun getAvailableSettings(deviceId: String, dataType: SensorDataType): Map<String, Set<Int>>? {
+        val polarDataType = dataType.toPolarDeviceDataType() ?: return null
+        return try {
+            api.requestStreamSettings(deviceId, polarDataType)
+                .settings
+                .mapKeys { it.key.name }
+                .mapValues { it.value }
+        } catch (e: Exception) {
+            Log.w("PolarVendorApi", "Failed to get settings for $deviceId $dataType", e)
+            null
+        }
+    }
+
     override fun startStreaming(deviceId: String, dataType: SensorDataType, settings: Any?) {
         if (activeStreamJobs.containsKey(deviceId to dataType)) return
+        if (deviceId in gattReadyDevices) {
+            startStreamNow(deviceId, dataType, settings)
+        } else {
+            pendingStreams.getOrPut(deviceId) { mutableListOf() }.add(dataType to settings)
+        }
+    }
 
+    private fun startStreamNow(deviceId: String, dataType: SensorDataType, settings: Any?) {
         val job = when (dataType) {
             SensorDataType.HR -> startHrStream(deviceId)
             SensorDataType.PPI -> startPpiStream(deviceId)
@@ -224,6 +283,8 @@ class PolarVendorApi(
                         .catch { e -> Log.e("PolarVendorApi", "ACC stream fail", e) }
                         .collect()
                     break
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: PolarDeviceNotFound) {
                     retries++; if (retries < 3) delay(2000) else Log.e("PolarVendorApi", "ACC failed", e)
                 } catch (e: Exception) {
@@ -247,6 +308,8 @@ class PolarVendorApi(
                         .catch { e -> Log.e("PolarVendorApi", "ECG stream fail", e) }
                         .collect()
                     break
+                } catch (e: CancellationException) {
+                    throw e
                 } catch (e: PolarDeviceNotFound) {
                     retries++; if (retries < 3) delay(2000) else Log.e("PolarVendorApi", "ECG failed", e)
                 } catch (e: Exception) {
@@ -257,9 +320,5 @@ class PolarVendorApi(
 
     override fun onForegroundEntered() {
         api.foregroundEntered()
-    }
-
-    fun destroy() {
-        scope.cancel()
     }
 }

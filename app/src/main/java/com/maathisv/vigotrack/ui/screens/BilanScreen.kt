@@ -53,21 +53,21 @@ fun BilanScreen(
     val stages by homeViewModel.stages.collectAsState()
     val stage = stages.find { it.id == stageId }
     val activities by homeViewModel.getActivitiesForStage(stageId).collectAsState(initial = emptyList())
+    val allActivityTypes by homeViewModel.activityTypes.collectAsState()
     val patients by homeViewModel.patients.collectAsState()
     val sensorPatientLinks by homeViewModel.sensorPatientLinks.collectAsState()
 
-    val bilanTypes = ActivityType.entries.filter { it.category == ActivityCategory.BILAN }
+    val bilanTypes = remember(allActivityTypes, activities) {
+        val fromTable = allActivityTypes.filter { it.category == ActivityCategory.BILAN }
+        val fromStage = activities
+            .filter { it.activityType.category == ActivityCategory.BILAN }
+            .map { it.activityType }
+        (fromTable + fromStage).distinctBy { it.name }
+    }
     val completedMap = remember(activities) { buildCompletedMap(activities) }
 
     var showConfigDialog by remember { mutableStateOf(false) }
 
-    val connectionState by homeViewModel.connectionState.collectAsState()
-    val deviceConnectionStates by homeViewModel.deviceConnectionStates.collectAsState()
-    val scannedDevices by homeViewModel.scannedDevices.collectAsState()
-    val connectedDevicesList by homeViewModel.connectedDevicesList.collectAsState()
-    val connectingId by homeViewModel.isConnectingToId.collectAsState()
-    val currentLogUri by homeViewModel.currentLogUri.collectAsState()
-    val namingTemplate by homeViewModel.namingTemplate.collectAsState()
     val context = LocalContext.current
 
     val folderPickerLauncher = rememberLauncherForActivityResult(
@@ -136,39 +136,12 @@ fun BilanScreen(
         }
     }
 
-    if (showConfigDialog) {
-        val showFeatures by homeViewModel.showFeatures.collectAsState()
-        val logFeatures by homeViewModel.logFeatures.collectAsState()
-        ConfigDialog(
-            scannedDevices = scannedDevices,
-            connectedDevicesList = connectedDevicesList,
-            deviceConnectionStates = deviceConnectionStates,
-            connectingId = connectingId,
-            patients = patients,
-            sensorPatientLinks = sensorPatientLinks,
-            currentLogUri = currentLogUri,
-            namingTemplate = namingTemplate,
-            showFeatures = showFeatures,
-            logFeatures = logFeatures,
-            onDismiss = { showConfigDialog = false },
-            onConnect = { sensor -> homeViewModel.connectToDevice(sensor) },
-            onDisconnect = { id -> homeViewModel.disconnectFromDevice(id) },
-            onRenameSensor = { deviceId, name -> homeViewModel.renameSensor(deviceId, name) },
-            onAddPatient = { name -> homeViewModel.addPatient(name) },
-            onDeletePatient = { patient -> homeViewModel.deletePatient(patient) },
-            onPickLogFolder = { folderPickerLauncher.launch(null) },
-            onTemplateChange = { homeViewModel.updateNamingTemplate(it) },
-            onResetTemplate = { homeViewModel.resetNamingTemplate() },
-            onCreateSensorPatientLink = { patientId, sensorId, features ->
-                homeViewModel.createSensorPatientLink(patientId, sensorId, features)
-            },
-            onDeleteSensorPatientLink = { link ->
-                homeViewModel.deleteSensorPatientLink(link)
-            },
-            onToggleShowFeature = { feature -> homeViewModel.toggleShowFeature(feature) },
-            onToggleLogFeature = { feature -> homeViewModel.toggleLogFeature(feature) }
-        )
-    }
+    ConfigDialog(
+        homeViewModel = homeViewModel,
+        show = showConfigDialog,
+        onDismiss = { showConfigDialog = false },
+        onPickLogFolder = { folderPickerLauncher.launch(null) }
+    )
 }
 
 @Composable

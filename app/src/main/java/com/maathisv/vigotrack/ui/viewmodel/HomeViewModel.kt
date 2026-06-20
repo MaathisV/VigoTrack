@@ -3,9 +3,10 @@ package com.maathisv.vigotrack.ui.viewmodel
 import android.app.Application
 import android.content.Intent
 import android.util.Log
-import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.maathisv.vigotrack.data.ActivityTypeDataSource
+import com.maathisv.vigotrack.data.ConfigImporter
 import com.maathisv.vigotrack.data.PatientDataSource
 import com.maathisv.vigotrack.data.SensorPatientLinkDataSource
 import com.maathisv.vigotrack.data.StageDataSource
@@ -19,15 +20,19 @@ import com.maathisv.vigotrack.repository.ActivityRepository
 import com.maathisv.vigotrack.repository.SensorRepository
 import com.maathisv.vigotrack.services.ACTION_START_STREAMS
 import com.maathisv.vigotrack.services.ACTION_STOP_STREAMS
-import com.maathisv.vigotrack.services.DEFAULT_TEMPLATE
 import com.maathisv.vigotrack.services.EXTRA_ACTIVITY_CATEGORY
+import com.maathisv.vigotrack.services.EXTRA_ACTIVITY_ID
 import com.maathisv.vigotrack.services.EXTRA_ACTIVITY_NAME
 import com.maathisv.vigotrack.services.EXTRA_PATIENT_NAMES
 import com.maathisv.vigotrack.services.EXTRA_SENSOR_IDS
 import com.maathisv.vigotrack.services.EXTRA_SESSION_DATE
 import com.maathisv.vigotrack.services.EXTRA_STAGE_NAME
 import com.maathisv.vigotrack.services.SensorService
+import com.maathisv.vigotrack.util.PreferencesManager
+import com.maathisv.vigotrack.util.toggleActivityExportMarker
+import com.polar.sdk.api.model.PolarSensorSetting
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -46,12 +51,39 @@ class HomeViewModel(
     private val sensorRepo: SensorRepository,
     private val patientDataSource: PatientDataSource,
     private val stageDataSource: StageDataSource,
-    private val sensorPatientLinkDataSource: SensorPatientLinkDataSource
+    private val sensorPatientLinkDataSource: SensorPatientLinkDataSource,
+    private val activityTypeDataSource: ActivityTypeDataSource
 ) : AndroidViewModel(application) {
 
-    val connectionState = sensorRepo.connectionState
+    private val prefsManager = PreferencesManager(application)
+
+    private val configImporter = ConfigImporter(
+        patientDataSource = patientDataSource,
+        stageDataSource = stageDataSource,
+        activityDataSource = activityRepo.dataSource,
+        activityTypeDataSource = activityTypeDataSource
+    )
+
+    init {
+        viewModelScope.launch(Dispatchers.IO) {
+            activityTypeDataSource.seedIfEmpty()
+        }
+    }
+
+    sealed class ImportState {
+        data class Preview(val preview: com.maathisv.vigotrack.data.ImportPreview, val uri: android.net.Uri) : ImportState()
+        data object Importing : ImportState()
+        data class Done(val result: com.maathisv.vigotrack.data.ImportResult) : ImportState()
+        data class Error(val message: String) : ImportState()
+    }
+
+    private val _importState = MutableStateFlow<ImportState?>(null)
+    val importState: StateFlow<ImportState?> = _importState.asStateFlow()
+
     val deviceConnectionStates = sensorRepo.deviceConnectionStates
     val activities = activityRepo.allActivities
+    val activityTypes = activityTypeDataSource.getAll()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val sensorLiveData = sensorRepo.liveData
 
     val connectedDevicesList = combine(
@@ -64,6 +96,10 @@ class HomeViewModel(
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = emptyList()
     )
+
+    val savedSensorsList: StateFlow<List<Sensor>> = sensorRepo.savedSensors
+        .map { list -> list.sortedBy { it.effectiveName } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val scannedDevices: StateFlow<List<Sensor>> = sensorRepo.discoveredDevices
         .map { it.toList() }
@@ -83,92 +119,84 @@ class HomeViewModel(
 
     val deviceAvailableDataTypes = sensorRepo.availableStreamDataTypes
 
-    fun getAvailableFeaturesForDevice(deviceId: String): Set<String> {
-        return sensorRepo.getAvailableFeaturesForDevice(deviceId)
-    }
+    private val _availableSettings = MutableStateFlow<Map<String, Map<String, Set<Int>>>>(emptyMap())
+    val availableSettings: StateFlow<Map<String, Map<String, Set<Int>>>> = _availableSettings.asStateFlow()
 
-    fun getSupportedSettings(deviceId: String, feature: String) {
-        viewModelScope.launch {
-            sensorRepo.getSupportedSettings(deviceId, feature)
+    private val _selectedSettings = MutableStateFlow<Map<String, Pair<Int, Int>>>(emptyMap())
+    val selectedSettings: StateFlow<Map<String, Pair<Int, Int>>> = _selectedSettings.asStateFlow()
+
+    fun queryAvailableSettings(deviceId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val supported = deviceAvailableDataTypes.value[deviceId] ?: emptySet()
+            listOf("ACC", "ECG").filter { it in supported }.forEach { feature ->
+                val result = sensorRepo.getAvailableSettings(deviceId, feature)
+                if (result != null) {
+                    _availableSettings.value += ("$deviceId:$feature" to result)
+                    _selectedSettings.value += ("$deviceId:$feature" to (
+                                            prefsManager.getSampleRate(deviceId, feature) to prefsManager.getResolution(deviceId, feature)
+                                        ))
+                }
+            }
         }
     }
 
-    private val _currentLogUri = MutableStateFlow(getSavedLogUri())
+    fun setSensorSettings(deviceId: String, feature: String, sampleRate: Int, resolution: Int) {
+        prefsManager.setSampleRate(deviceId, feature, sampleRate)
+        prefsManager.setResolution(deviceId, feature, resolution)
+        _selectedSettings.value += ("$deviceId:$feature" to (sampleRate to resolution))
+    }
+
+    private fun buildSensorSettings(deviceId: String, feature: String): Any? {
+        val sampleRate = prefsManager.getSampleRate(deviceId, feature)
+        val resolution = prefsManager.getResolution(deviceId, feature)
+        if (sampleRate == 0 && resolution == 0) return null
+        val map = mutableMapOf<PolarSensorSetting.SettingType, Int>()
+        if (sampleRate > 0) map[PolarSensorSetting.SettingType.SAMPLE_RATE] = sampleRate
+        if (resolution > 0) map[PolarSensorSetting.SettingType.RESOLUTION] = resolution
+        return PolarSensorSetting(map)
+    }
+
+    private val _currentLogUri = MutableStateFlow(prefsManager.logUri)
     val currentLogUri: StateFlow<String> = _currentLogUri.asStateFlow()
 
-    private val _namingTemplate = MutableStateFlow(getFileNamingTemplate())
+    private val _namingTemplate = MutableStateFlow(prefsManager.fileNamingTemplate)
     val namingTemplate: StateFlow<String> = _namingTemplate.asStateFlow()
 
-    private val _showFeatures = MutableStateFlow(getFeatureSettings("show"))
+    private val _showFeatures = MutableStateFlow(prefsManager.getAllShowFeatures())
     val showFeatures: StateFlow<Map<String, Boolean>> = _showFeatures.asStateFlow()
 
-    private val _logFeatures = MutableStateFlow(getFeatureSettings("log"))
+    private val _logFeatures = MutableStateFlow(prefsManager.getAllLogFeatures())
     val logFeatures: StateFlow<Map<String, Boolean>> = _logFeatures.asStateFlow()
-
-    private fun getFeatureSettings(prefix: String): Map<String, Boolean> {
-        val prefs = getApplication<Application>()
-            .getSharedPreferences("vigo_prefs", Application.MODE_PRIVATE)
-        return mapOf(
-            "HR" to prefs.getBoolean("${prefix}_HR", true),
-            "PPI" to prefs.getBoolean("${prefix}_PPI", true),
-            "ACC" to prefs.getBoolean("${prefix}_ACC", true),
-            "ECG" to prefs.getBoolean("${prefix}_ECG", true),
-            "EULER" to prefs.getBoolean("${prefix}_EULER", true),
-            "QUATERNION" to prefs.getBoolean("${prefix}_QUATERNION", true),
-            "FREE_ACCELERATION" to prefs.getBoolean("${prefix}_FREE_ACCELERATION", true)
-        )
-    }
 
     fun toggleShowFeature(feature: String) {
         val current = _showFeatures.value.toMutableMap()
         current[feature] = !(current[feature] ?: true)
         _showFeatures.value = current
-        getApplication<Application>()
-            .getSharedPreferences("vigo_prefs", Application.MODE_PRIVATE)
-            .edit { putBoolean("show_$feature", current[feature] ?: true) }
+        prefsManager.setShowFeature(feature, current[feature] ?: true)
     }
 
     fun toggleLogFeature(feature: String) {
         val current = _logFeatures.value.toMutableMap()
         current[feature] = !(current[feature] ?: true)
         _logFeatures.value = current
-        getApplication<Application>()
-            .getSharedPreferences("vigo_prefs", Application.MODE_PRIVATE)
-            .edit { putBoolean("log_$feature", current[feature] ?: true) }
+        prefsManager.setLogFeature(feature, current[feature] ?: true)
     }
 
-    private fun getActiveFeatures(): Set<String> {
-        return (_showFeatures.value.filter { it.value }.keys + _logFeatures.value.filter { it.value }.keys)
-    }
-
-    private fun getSavedLogUri(): String {
-        return getApplication<Application>()
-            .getSharedPreferences("vigo_prefs", Application.MODE_PRIVATE)
-            .getString("log_uri", "") ?: ""
-    }
-
-    private fun getFileNamingTemplate(): String {
-        return getApplication<Application>()
-            .getSharedPreferences("vigo_prefs", Application.MODE_PRIVATE)
-            .getString("file_naming_template", DEFAULT_TEMPLATE) ?: DEFAULT_TEMPLATE
-    }
+    private fun getActiveFeatures(): Set<String> = prefsManager.getActiveFeatures()
 
     fun updateLogUri(uri: String) {
-        getApplication<Application>()
-            .getSharedPreferences("vigo_prefs", Application.MODE_PRIVATE)
-            .edit { putString("log_uri", uri) }
+        prefsManager.logUri = uri
         _currentLogUri.value = uri
     }
 
     fun updateNamingTemplate(template: String) {
-        getApplication<Application>()
-            .getSharedPreferences("vigo_prefs", Application.MODE_PRIVATE)
-            .edit { putString("file_naming_template", template) }
+        prefsManager.fileNamingTemplate = template
         _namingTemplate.value = template
     }
 
     fun resetNamingTemplate() {
-        updateNamingTemplate(DEFAULT_TEMPLATE)
+        prefsManager.resetNamingTemplate()
+        _namingTemplate.value = prefsManager.fileNamingTemplate
     }
 
     fun startScanning() {
@@ -195,18 +223,16 @@ class HomeViewModel(
         }
     }
 
-    fun renameSensor(deviceId: String, newName: String) {
-        sensorRepo.updateSensorDisplayName(deviceId, newName)
+    fun forgetDevice(deviceId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            sensorPatientLinks.value.filter { it.sensorId == deviceId }
+                .forEach { sensorPatientLinkDataSource.deleteLink(it) }
+            sensorRepo.forgetDevice(deviceId)
+        }
     }
 
-    fun createActivity(type: ActivityType, date: Long, stageId: Long? = null, onCreated: ((String) -> Unit)? = null) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val id = java.util.UUID.randomUUID().toString()
-            activityRepo.createActivity(type, date, stageId, id)
-            withContext(Dispatchers.Main) {
-                onCreated?.invoke(id)
-            }
-        }
+    fun renameSensor(deviceId: String, newName: String) {
+        sensorRepo.updateSensorDisplayName(deviceId, newName)
     }
 
     fun createActivityAndLink(
@@ -267,7 +293,6 @@ class HomeViewModel(
 
     fun toggleSession(activity: ActivitySession, checkedKeys: Set<String> = emptySet()) {
         viewModelScope.launch {
-            // Use getApplication() here!
             val intent = Intent(getApplication(), SensorService::class.java)
 
             if (activity.isRunning) {
@@ -321,7 +346,13 @@ class HomeViewModel(
                         link.copy(featuresToTrack = link.featuresToTrack.filter { it in activeFeatures })
                     }
                 )
-                sensorRepo.startActivityStreaming(updatedActivity)
+                updatedActivity.links.forEach { link ->
+                    link.featuresToTrack.forEach { feature ->
+                        val settings = buildSensorSettings(link.sensorId, feature)
+                        sensorRepo.startFeatureStream(link.sensorId, feature, settings)
+                        delay(300)
+                    }
+                }
 
                 val sensorIds = allActiveLinks.map { it.sensorId }.toTypedArray()
                 val patientNames = allActiveLinks.map { it.patientName }.toTypedArray()
@@ -334,6 +365,7 @@ class HomeViewModel(
                     putExtra(EXTRA_PATIENT_NAMES, patientNames)
                     putExtra(EXTRA_ACTIVITY_NAME, activity.activityType.displayName)
                     putExtra(EXTRA_ACTIVITY_CATEGORY, activity.activityType.category.name)
+                    putExtra(EXTRA_ACTIVITY_ID, activity.id)
                     putExtra(EXTRA_STAGE_NAME, stageName)
                     putExtra(EXTRA_SESSION_DATE, System.currentTimeMillis())
                 }
@@ -350,6 +382,8 @@ class HomeViewModel(
 
     fun deletePatient(patient: Patient) {
         viewModelScope.launch(Dispatchers.IO) {
+            sensorPatientLinks.value.filter { it.patientId == patient.id }
+                .forEach { sensorPatientLinkDataSource.deleteLink(it) }
             patientDataSource.deletePatient(patient)
         }
     }
@@ -381,6 +415,45 @@ class HomeViewModel(
         }
     }
 
+    fun updateStage(stage: Stage) {
+        viewModelScope.launch(Dispatchers.IO) {
+            stageDataSource.updateStage(stage)
+        }
+    }
+
+    fun deleteStage(stage: Stage) {
+        viewModelScope.launch(Dispatchers.IO) {
+            activityRepo.deleteActivitiesByStage(stage.id)
+            stageDataSource.deleteStage(stage)
+        }
+    }
+
+    fun parseImportConfig(uri: android.net.Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val preview = configImporter.parse(getApplication(), uri)
+                _importState.value = ImportState.Preview(preview, uri)
+            } catch (e: Exception) {
+                _importState.value = ImportState.Error(e.message ?: "Erreur de lecture du fichier")
+            }
+        }
+    }
+
+    fun confirmImport(uri: android.net.Uri) {
+        _importState.value = ImportState.Importing
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val result = configImporter.import(getApplication(), uri)
+                _importState.value = ImportState.Done(result)
+            } catch (e: Exception) {
+                _importState.value = ImportState.Error(e.message ?: "Erreur lors de l'import")
+            }
+        }
+    }
+
+    fun dismissImportResult() {
+        _importState.value = null
+    }
     fun updateActivityType(activity: ActivitySession, newType: ActivityType) {
         viewModelScope.launch(Dispatchers.IO) {
             activityRepo.updateActivity(activity.copy(activityType = newType))
@@ -410,38 +483,9 @@ class HomeViewModel(
         viewModelScope.launch {
             val activeFeatures = getActiveFeatures()
             features.filter { it in activeFeatures }.forEach { feature ->
-                sensorRepo.startFeatureStream(sensorId, feature)
+                val settings = buildSensorSettings(sensorId, feature)
+                sensorRepo.startFeatureStream(sensorId, feature, settings)
             }
-        }
-    }
-
-    fun resumeActivity(activity: ActivitySession) {
-        viewModelScope.launch {
-            val resumed = activity.copy(startTime = System.currentTimeMillis(), endTime = null, isRunning = true)
-            activityRepo.updateActivity(resumed)
-            val activeFeatures = getActiveFeatures()
-            val filtered = resumed.copy(
-                links = resumed.links.map { link ->
-                    link.copy(featuresToTrack = link.featuresToTrack.filter { it in activeFeatures })
-                }
-            )
-            sensorRepo.startActivityStreaming(filtered)
-
-            val sensorIds = resumed.links.map { it.sensorId }.toTypedArray()
-            val patientNames = resumed.links.map { it.patientName }.toTypedArray()
-            val stageName = resumed.stageId?.let { id ->
-                stages.value.find { it.id == id }?.name
-            } ?: "NoStage"
-            val intent = Intent(getApplication(), SensorService::class.java).apply {
-                action = ACTION_START_STREAMS
-                putExtra(EXTRA_SENSOR_IDS, sensorIds)
-                putExtra(EXTRA_PATIENT_NAMES, patientNames)
-                putExtra(EXTRA_ACTIVITY_NAME, resumed.activityType.displayName)
-                putExtra(EXTRA_ACTIVITY_CATEGORY, resumed.activityType.category.name)
-                putExtra(EXTRA_STAGE_NAME, stageName)
-                putExtra(EXTRA_SESSION_DATE, System.currentTimeMillis())
-            }
-            getApplication<Application>().startService(intent)
         }
     }
 
@@ -456,6 +500,8 @@ class HomeViewModel(
             val activities = activityRepo.allActivities.first()
             val activity = activities.find { it.id == activityId } ?: return@launch
             activityRepo.updateActivity(activity.copy(isStale = true))
+            val stageName = stages.value.find { it.id == activity.stageId }?.name ?: "NoStage"
+            toggleActivityExportMarker(application, _currentLogUri.value, _namingTemplate.value, stageName, activity, create = true)
         }
     }
 
@@ -464,6 +510,8 @@ class HomeViewModel(
             val activities = activityRepo.allActivities.first()
             val activity = activities.find { it.id == activityId } ?: return@launch
             activityRepo.updateActivity(activity.copy(isStale = false))
+            val stageName = stages.value.find { it.id == activity.stageId }?.name ?: "NoStage"
+            toggleActivityExportMarker(application, _currentLogUri.value, _namingTemplate.value, stageName, activity, create = false)
         }
     }
 }

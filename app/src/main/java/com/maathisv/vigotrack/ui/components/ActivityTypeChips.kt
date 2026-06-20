@@ -1,14 +1,12 @@
 package com.maathisv.vigotrack.ui.components
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.maathisv.vigotrack.models.ActivityType
 
@@ -27,7 +25,7 @@ fun ActivityTypeChips(
         ) {
             activiteTypes.forEach { type ->
                 FilterChip(
-                    selected = selectedType == type,
+                    selected = selectedType?.name == type.name,
                     onClick = { onTypeSelected(type) },
                     label = { Text(type.displayName) }
                 )
