@@ -39,7 +39,7 @@ import com.maathisv.vigotrack.models.Sensor
 @Composable
 fun ConfigDeviceTab(
     scannedDevices: List<Sensor>,
-    connectedDevicesList: List<Sensor>,
+    savedDevicesList: List<Sensor>,
     deviceConnectionStates: Map<String, ConnectionState>,
     connectingId: String?,
     onConnect: (Sensor) -> Unit,
@@ -53,40 +53,40 @@ fun ConfigDeviceTab(
 ) {
     Column(modifier = Modifier.fillMaxWidth().heightIn(max = 450.dp)) {
         Text(
-            text = "Appareils connectés",
+            text = "Appareils enregistrés",
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary
         )
 
         var expandedDeviceId by remember { mutableStateOf<String?>(null) }
 
-        if (connectedDevicesList.isEmpty()) {
+        if (savedDevicesList.isEmpty()) {
             Text(
-                text = "Aucun appareil connecté actuellement",
+                text = "Aucun appareil enregistré",
                 modifier = Modifier.padding(vertical = 12.dp),
                 style = MaterialTheme.typography.bodySmall
             )
         } else {
             Column {
-                connectedDevicesList.forEach { sensor ->
+                savedDevicesList.forEach { sensor ->
                     val state = deviceConnectionStates[sensor.deviceId]
+                    val isConnected = state == ConnectionState.CONNECTED || state == ConnectionState.FEATURES_READY
                     val isConnecting = state == ConnectionState.CONNECTING
                     val stateSuffix = when (state) {
                         ConnectionState.FEATURES_READY -> " (Prêt)"
+                        ConnectionState.CONNECTED -> " (Connecté)"
                         ConnectionState.CONNECTING -> " (Connexion…)"
-                        else -> ""
+                        else -> " (Déconnecté)"
                     }
 
                     Column {
                         ListItem(
-                            headlineContent = {
-                                Text("${sensor.effectiveName}$stateSuffix")
-                            },
+                            headlineContent = { Text("${sensor.effectiveName}$stateSuffix") },
                             supportingContent = { Text("${sensor.vendor.uppercase()} · ID : ${sensor.deviceId}") },
                             trailingContent = {
                                 if (isConnecting) {
                                     CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                                } else {
+                                } else if (isConnected) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Text(
                                             if (expandedDeviceId == sensor.deviceId) "▼" else "▶",
@@ -97,9 +97,13 @@ fun ConfigDeviceTab(
                                             Text("Déconnecter", color = MaterialTheme.colorScheme.error)
                                         }
                                     }
+                                } else {
+                                    Button(onClick = { onConnect(sensor) }) {
+                                        Text("Connecter")
+                                    }
                                 }
                             },
-                            modifier = Modifier.clickable {
+                            modifier = Modifier.clickable(enabled = isConnected) {
                                 expandedDeviceId = if (expandedDeviceId == sensor.deviceId) null else sensor.deviceId
                                 if (expandedDeviceId == sensor.deviceId) {
                                     onQuerySettings(sensor.deviceId)
@@ -107,7 +111,7 @@ fun ConfigDeviceTab(
                             }
                         )
 
-                        if (expandedDeviceId == sensor.deviceId) {
+                        if (isConnected && expandedDeviceId == sensor.deviceId) {
                             SensorSettingsSection(
                                 deviceId = sensor.deviceId,
                                 sensorName = sensor.effectiveName,
@@ -133,8 +137,8 @@ fun ConfigDeviceTab(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        val connectedIds = connectedDevicesList.map { it.deviceId }.toSet()
-        val availableDevices = scannedDevices.filter { it.deviceId !in connectedIds }
+        val savedIds = savedDevicesList.map { it.deviceId }.toSet()
+        val availableDevices = scannedDevices.filter { it.deviceId !in savedIds }
 
         if (availableDevices.isEmpty()) {
             Column(

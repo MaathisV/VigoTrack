@@ -99,6 +99,10 @@ class HomeViewModel(
         initialValue = emptyList()
     )
 
+    val savedSensorsList: StateFlow<List<Sensor>> = sensorRepo.savedSensors
+        .map { list -> list.sortedBy { it.effectiveName } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     val scannedDevices: StateFlow<List<Sensor>> = sensorRepo.discoveredDevices
         .map { it.toList() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())

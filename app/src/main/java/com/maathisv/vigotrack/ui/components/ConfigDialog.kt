@@ -25,6 +25,7 @@ import com.maathisv.vigotrack.ui.viewmodel.HomeViewModel
 fun ConfigDialog(
     scannedDevices: List<Sensor>,
     connectedDevicesList: List<Sensor>,
+    savedDevicesList: List<Sensor>,
     deviceConnectionStates: Map<String, ConnectionState>,
     connectingId: String?,
     patients: List<Patient>,
@@ -79,7 +80,7 @@ fun ConfigDialog(
             when (selectedTab) {
                 0 -> ConfigDeviceTab(
                     scannedDevices = scannedDevices,
-                    connectedDevicesList = connectedDevicesList,
+                    savedDevicesList = savedDevicesList,
                     deviceConnectionStates = deviceConnectionStates,
                     connectingId = connectingId,
                     onConnect = onConnect,
@@ -135,6 +136,7 @@ fun ConfigDialog(
     val deviceConnectionStates by homeViewModel.deviceConnectionStates.collectAsState()
     val scannedDevices by homeViewModel.scannedDevices.collectAsState()
     val connectedDevicesList by homeViewModel.connectedDevicesList.collectAsState()
+    val savedDevicesList by homeViewModel.savedSensorsList.collectAsState()
     val connectingId by homeViewModel.isConnectingToId.collectAsState()
     val patients by homeViewModel.patients.collectAsState()
     val sensorPatientLinks by homeViewModel.sensorPatientLinks.collectAsState()
@@ -148,6 +150,7 @@ fun ConfigDialog(
     ConfigDialog(
         scannedDevices = scannedDevices,
         connectedDevicesList = connectedDevicesList,
+        savedDevicesList = savedDevicesList,
         deviceConnectionStates = deviceConnectionStates,
         connectingId = connectingId,
         patients = patients,
