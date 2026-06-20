@@ -38,6 +38,8 @@ VigoTrack is an Android application built with Kotlin and Jetpack Compose that c
 - **Data Export** — Log all streamed data to structured files using Android SAF with a customizable file naming template
 - **Foreground Service** — Keeps BLE connections alive and data streaming in the background via `SensorService`
 - **Dark/Light Theme** — Material 3 with dynamic color support (Android 12+) and brand palette
+- **Config Import** — Bulk-import patients, stages, activities, and sensor links from a JSON file
+- **Forget Device** — Remove a saved sensor from the database and clean up all associated state
 
 ---
 
@@ -67,9 +69,20 @@ Open in Android Studio, sync Gradle, and run on a connected device.
 5. **Start Streaming** — In the activity session screen, toggle between **Graph** and **Compact** view, then tap a patient card to begin recording
 6. **Export Data** — Choose an export folder in settings; CSV files are written automatically
 
+### Config Import
+
+You can bulk-import patients, stages, activities, and sensor links from a JSON file. Tap the **+** FAB on the main screen and select **Importer une config**, then pick a JSON file. A preview shows the counts of items to create.
+
+The JSON format supports:
+- **patients** — Array of patient names
+- **stages** — Each with `name`, `startDate`, `endDate`, and nested `activities` / `bilans`
+- **activities** — Each with `type`, `scheduledDate`, and optional `links` (patient, sensor, features)
+
+On confirmation, new patients, stages, activities, and sensor-patient links are created. Unknown activity type names are automatically added as custom types. A result dialog reports created, skipped, or errored items.
+
 ### Stages
 
-Stages represent phases of rehabilitation. Each stage has a name, start date, and end date. They are listed on the home screen ordered by start date (newest first). Tap a stage to view its detail screen showing activities grouped by day.
+Stages represent phases of rehabilitation. Each stage has a name, start date, and end date. They are listed on the home screen as cards ordered by start date (newest first). Tap a stage to view its detail screen showing activities grouped by day. Use the three-dot menu on a stage card to **Modifier** (edit) or **Supprimer** (delete) a stage — deleting a stage also removes all its linked activities.
 
 ### Activity Sessions
 
@@ -88,11 +101,20 @@ Navigate to the Bilan screen to see a matrix of patients vs. assessment types. T
 
 ### Connecting Sensors
 
-Open the settings dialog from any screen via the gear icon. The **Devices** tab lists available sensors from all active vendors (Polar, Xsens). Each device shows a vendor badge (`POLAR` or `XSENS`). Scans discover nearby BLE devices from every registered vendor. Once connected, the connection state transitions through:
+Open the settings dialog from any screen via the gear icon. The **Devices** tab shows two sections:
+
+- **Nearby** — Currently discovered BLE devices from all active vendors (Polar, Xsens). Excludes sensors already saved in the database.
+- **Appareils enregistrés** (Registered devices) — All previously paired sensors with per-row status:
+  - *Connected / Prêt* → expandable row with feature toggles + **Déconnecter** button
+  - *Disconnected* → static row with **Connecter** button
+
+Each device shows a vendor badge (`POLAR` or `XSENS`). Once connected, the connection state transitions through:
 
 `NOT_CONNECTED` → `CONNECTING` → `CONNECTED` → `FEATURES_READY`
 
-Use the **Links** tab to pre-configure patient-sensor-feature associations. Sensors persist across app restarts with auto-reconnection.
+Use the **Oublier** (Forget) button on any saved device to permanently remove it from the database and clear all associated state.
+
+Use the **Patients** tab to pre-configure patient-sensor-feature associations. Sensors persist across app restarts with auto-reconnection.
 
 ### Live Data Visualization
 
