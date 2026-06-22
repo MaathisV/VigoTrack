@@ -29,6 +29,7 @@ import com.maathisv.vigotrack.services.EXTRA_SESSION_DATE
 import com.maathisv.vigotrack.services.EXTRA_STAGE_NAME
 import com.maathisv.vigotrack.services.SensorService
 import com.maathisv.vigotrack.util.PreferencesManager
+import com.maathisv.vigotrack.util.resolveActivityExportDir
 import com.maathisv.vigotrack.util.toggleActivityExportMarker
 import com.polar.sdk.api.model.PolarSensorSetting
 import kotlinx.coroutines.Dispatchers
@@ -67,7 +68,25 @@ class HomeViewModel(
     init {
         viewModelScope.launch(Dispatchers.IO) {
             activityTypeDataSource.seedIfEmpty()
+            completeStuckSessions()
         }
+    }
+
+    private suspend fun completeStuckSessions() {
+        val stageNameMap = stageDataSource.getAllStages().first().associateBy { it.id }
+        activityRepo.allActivities.first()
+            .filter { it.isRunning && it.endTime == null }
+            .forEach { session ->
+                val crashEstimate = session.links.mapNotNull { link ->
+                    val stageName = session.stageId?.let { stageNameMap[it]?.name } ?: "NoStage"
+                    val dir = resolveActivityExportDir(
+                        getApplication(), prefsManager.logUri, prefsManager.fileNamingTemplate,
+                        stageName, session, link
+                    ) ?: return@mapNotNull null
+                    dir.listFiles().maxOfOrNull { it.lastModified() }
+                }.maxOrNull()
+                activityRepo.stopActivity(session, crashEstimate ?: System.currentTimeMillis())
+            }
     }
 
     sealed class ImportState {
