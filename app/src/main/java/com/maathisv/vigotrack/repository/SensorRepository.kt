@@ -78,6 +78,7 @@ class SensorRepository(
     val availableStreamDataTypes: StateFlow<Map<String, Set<String>>> = _availableStreamDataTypes.asStateFlow()
 
     private val connectingLock = mutableSetOf<String>()
+    private val pendingReconnectStreams = mutableMapOf<String, Set<String>>()
     private val activeStreams = mutableSetOf<StreamIdentifier>()
     private val previousHr = mutableMapOf<String, Int>()
 
@@ -109,12 +110,24 @@ class SensorRepository(
                         _availableStreamDataTypes.update { it - event.deviceId }
                         _deviceConnectionStates.update { it - event.deviceId }
                         previousHr.remove(event.deviceId)
+                        val deviceStreams = activeStreams.filter { it.first == event.deviceId }.map { it.second }.toSet()
+                        if (deviceStreams.isNotEmpty()) {
+                            pendingReconnectStreams[event.deviceId] = deviceStreams
+                        }
+                        activeStreams.removeAll { it.first == event.deviceId }
                     }
                     is SensorEvent.FeaturesReady -> {
                         _deviceConnectionStates.update { it + (event.deviceId to ConnectionState.FEATURES_READY) }
                         _availableStreamDataTypes.update { current ->
                             val existing = current[event.deviceId] ?: emptySet()
                             current + (event.deviceId to (existing + event.dataTypes.map { it.name }))
+                        }
+                        pendingReconnectStreams[event.deviceId]?.let { savedFeatures ->
+                            val available = _availableStreamDataTypes.value[event.deviceId] ?: emptySet()
+                            val (ready, remaining) = savedFeatures.partition { it in available }
+                            if (remaining.isEmpty()) pendingReconnectStreams.remove(event.deviceId)
+                            else pendingReconnectStreams[event.deviceId] = remaining.toSet()
+                            ready.forEach { feature -> startFeatureStream(event.deviceId, feature) }
                         }
                     }
                     is SensorEvent.StreamStarted -> { /* logged by vendor */ }
