@@ -36,6 +36,7 @@ fun ConfigDialog(
     availableSettings: Map<String, Map<String, Set<Int>>> = emptyMap(),
     selectedSettings: Map<String, Pair<Int, Int>> = emptyMap(),
     deviceAvailableDataTypes: Map<String, Set<String>> = emptyMap(),
+    savedSensors: List<Sensor> = emptyList(),
     onDismiss: () -> Unit,
     onConnect: (Sensor) -> Unit,
     onDisconnect: (String) -> Unit,
@@ -96,6 +97,7 @@ fun ConfigDialog(
                 1 -> ConfigPatientTab(
                     patients = patients,
                     connectedDevicesList = connectedDevicesList,
+                    savedSensors = savedSensors,
                     deviceAvailableDataTypes = deviceAvailableDataTypes,
                     sensorPatientLinks = sensorPatientLinks,
                     onAddPatient = onAddPatient,
@@ -163,6 +165,7 @@ fun ConfigDialog(
         availableSettings = availableSettings,
         selectedSettings = selectedSettings,
         deviceAvailableDataTypes = deviceDataTypes,
+        savedSensors = savedDevicesList,
         onDismiss = onDismiss,
         onConnect = { homeViewModel.connectToDevice(it) },
         onDisconnect = { homeViewModel.disconnectFromDevice(it) },

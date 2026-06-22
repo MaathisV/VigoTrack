@@ -55,6 +55,7 @@ private val featureLabels = mapOf(
 fun ConfigPatientTab(
     patients: List<Patient>,
     connectedDevicesList: List<Sensor>,
+    savedSensors: List<Sensor>,
     deviceAvailableDataTypes: Map<String, Set<String>>,
     sensorPatientLinks: List<SensorPatientLink>,
     onAddPatient: (String) -> Unit,
@@ -125,7 +126,7 @@ fun ConfigPatientTab(
                             if (patientLinks.isNotEmpty()) {
                                 Column {
                                     patientLinks.forEach { link ->
-                                        val sensorName = connectedDevicesList.find { it.deviceId == link.sensorId }?.effectiveName ?: link.sensorId
+                                        val sensorName = savedSensors.find { it.deviceId == link.sensorId }?.effectiveName ?: link.sensorId
                                         Row(
                                             modifier = Modifier.fillMaxWidth().clickable { deleteLinkTarget = link },
                                             verticalAlignment = Alignment.CenterVertically
@@ -185,7 +186,7 @@ fun ConfigPatientTab(
             text = {
                 val link = deleteLinkTarget!!
                 val patientName = patients.find { it.id == link.patientId }?.name ?: "Inconnu"
-                val sensorName = connectedDevicesList.find { it.deviceId == link.sensorId }?.effectiveName ?: link.sensorId
+                val sensorName = savedSensors.find { it.deviceId == link.sensorId }?.effectiveName ?: link.sensorId
                 Text("Supprimer le lien entre $patientName et $sensorName (${link.features.joinToString(", ")}) ?")
             },
             confirmButton = {
