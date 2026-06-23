@@ -40,6 +40,8 @@ VigoTrack is an Android application built with Kotlin and Jetpack Compose that c
 - **Dark/Light Theme** — Material 3 with dynamic color support (Android 12+) and brand palette
 - **Config Import** — Bulk-import patients, stages, activities, and sensor links from a JSON file
 - **Forget Device** — Remove a saved sensor from the database and clean up all associated state
+- **Server Export** — Stream sensor data to an InfluxDB 2.x server in real-time via HTTP batching (line protocol) with configurable URL, auth token, and bucket
+- **Health Monitoring** — Passive connection tracking on each batch send, plus a manual test button in settings; server health status dot on the recording screen
 
 ---
 
@@ -67,7 +69,7 @@ Open in Android Studio, sync Gradle, and run on a connected device.
 3. **Connect a Sensor** — Open settings (gear icon) → scan for nearby devices → connect
 4. **Link a Patient** — In settings, assign a patient to the connected sensor
 5. **Start Streaming** — In the activity session screen, toggle between **Graph** and **Compact** view, then tap a patient card to begin recording
-6. **Export Data** — Choose an export folder in settings; CSV files are written automatically
+6. **Export Data** — Choose an export folder in settings; CSV files are written automatically. Optionally configure a server URL, auth token, and InfluxDB bucket in settings to stream data live to a remote InfluxDB instance.
 
 ### Config Import
 
@@ -258,6 +260,8 @@ All versions are managed via `gradle/libs.versions.toml`. Major dependencies:
 - `androidx.compose:compose-bom:2025.02.00` — Compose UI toolkit
 - `io.reactivex.rxjava3:rxjava:3.1.12` — Reactive streams
 - `androidx.navigation:navigation-compose:2.9.8` — Screen navigation
+- `com.squareup.okhttp3:okhttp:5.4.0` — HTTP client for InfluxDB server export
+- `com.google.mlkit:play-services-code-scanner:16.1.0` — QR code scanning for server auth token
 
 > **Note:** Only Polar BLE integration has been tested end-to-end. Xsens Dot vendor support and the multi-vendor `VendorApi` framework are implemented as a compatible abstraction but remain untested with real hardware.
 
