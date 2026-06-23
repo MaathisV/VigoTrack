@@ -90,7 +90,11 @@ class PolarVendorApi(
             }
 
             override fun deviceDisconnected(polarDeviceInfo: PolarDeviceInfo) {
-                _events.tryEmit(SensorEvent.DeviceDisconnected(polarDeviceInfo.deviceId))
+                val deviceId = polarDeviceInfo.deviceId
+                activeStreamJobs.filterKeys { it.first == deviceId }.values.forEach { it.cancel() }
+                activeStreamJobs.keys.filter { it.first == deviceId }.forEach { activeStreamJobs.remove(it) }
+                gattReadyDevices.remove(deviceId)
+                _events.tryEmit(SensorEvent.DeviceDisconnected(deviceId))
             }
 
             override fun bleSdkFeatureReady(identifier: String, feature: PolarBleApi.PolarBleSdkFeature) {

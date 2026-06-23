@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -16,6 +17,7 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -26,7 +28,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.maathisv.vigotrack.ui.viewmodel.ServerHealth
 
 @Composable
 fun ConfigSettingsTab(
@@ -34,11 +38,22 @@ fun ConfigSettingsTab(
     namingTemplate: String,
     showFeatures: Map<String, Boolean>,
     logFeatures: Map<String, Boolean>,
+    serverUrl: String = "",
+    serverFeatures: Map<String, Boolean> = emptyMap(),
+    serverHealth: ServerHealth = ServerHealth.Unknown,
+    authToken: String = "",
+    dbName: String = "vigotrack",
     onPickLogFolder: () -> Unit,
     onTemplateChange: (String) -> Unit,
     onResetTemplate: () -> Unit,
     onToggleShowFeature: (String) -> Unit,
-    onToggleLogFeature: (String) -> Unit
+    onToggleLogFeature: (String) -> Unit,
+    onToggleServerFeature: (String) -> Unit = {},
+    onUpdateServerUrl: (String) -> Unit = {},
+    onUpdateAuthToken: (String) -> Unit = {},
+    onUpdateDbName: (String) -> Unit = {},
+    onScanQrCode: () -> Unit = {},
+    onTestServerConnection: () -> Unit = {}
 ) {
     var showPlaceholders by remember { mutableStateOf(false) }
 
@@ -132,6 +147,98 @@ fun ConfigSettingsTab(
         HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
 
         Text(
+            text = "Export serveur",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = "Les données seront envoyées par lots à un serveur distant pendant l'enregistrement.",
+            style = MaterialTheme.typography.bodySmall
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        OutlinedTextField(
+            value = serverUrl,
+            onValueChange = onUpdateServerUrl,
+            label = { Text("URL du serveur") },
+            placeholder = { Text("http://192.168.1.42:8080") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            OutlinedTextField(
+                value = authToken,
+                onValueChange = onUpdateAuthToken,
+                label = { Text("Token d'authentification") },
+                placeholder = { Text("Bearer token InfluxDB…") },
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    unfocusedBorderColor = if (authToken.isNotBlank())
+                        MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
+                )
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Button(onClick = onScanQrCode) {
+                Text("QR")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        OutlinedTextField(
+            value = dbName,
+            onValueChange = onUpdateDbName,
+            label = { Text("Nom de la base (bucket)") },
+            placeholder = { Text("vigotrack") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Button(
+                onClick = onTestServerConnection,
+                enabled = serverUrl.isNotBlank()
+            ) {
+                Text("Tester la connexion")
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            val (color, label) = when (serverHealth) {
+                is ServerHealth.Connected -> MaterialTheme.colorScheme.primary to "Connecté"
+                is ServerHealth.Failure -> MaterialTheme.colorScheme.error to "Échec"
+                is ServerHealth.Unknown -> MaterialTheme.colorScheme.outline to "Inconnu"
+            }
+            Surface(
+                shape = MaterialTheme.shapes.small,
+                color = color.copy(alpha = 0.15f)
+            ) {
+                Text(
+                    text = label,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = color
+                )
+            }
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+        Text(
             text = "Visibilité des données",
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary
@@ -165,6 +272,14 @@ fun ConfigSettingsTab(
                         onCheckedChange = { onToggleLogFeature(feature) }
                     )
                     Text("Enregistrer", style = MaterialTheme.typography.labelSmall)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(
+                        enabled = serverUrl.isNotBlank(),
+                        checked = serverFeatures[feature] ?: false,
+                        onCheckedChange = { onToggleServerFeature(feature) }
+                    )
+                    Text("Serveur", style = MaterialTheme.typography.labelSmall)
                 }
             }
         }

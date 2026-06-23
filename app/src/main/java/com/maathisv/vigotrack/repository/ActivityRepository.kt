@@ -39,11 +39,10 @@ class ActivityRepository(val dataSource: ActivityDataSource) {
         dataSource.updateActivity(startedActivity)
     }
 
-    suspend fun stopActivity(activity: ActivitySession) {
-        val now = System.currentTimeMillis()
-        val elapsedThisSegment = activity.startTime?.let { now - it } ?: 0L
+    suspend fun stopActivity(activity: ActivitySession, endTime: Long = System.currentTimeMillis()) {
+        val elapsedThisSegment = activity.startTime?.let { endTime - it } ?: 0L
         val stoppedActivity = activity.copy(
-            endTime = now,
+            endTime = endTime,
             isRunning = false,
             accumulatedTimeMs = activity.accumulatedTimeMs + elapsedThisSegment
         )
