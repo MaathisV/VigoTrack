@@ -45,6 +45,15 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import java.util.concurrent.TimeUnit
+
+sealed interface ServerHealth {
+    data object Unknown : ServerHealth
+    data object Connected : ServerHealth
+    data class Failure(val message: String) : ServerHealth
+}
 
 class HomeViewModel(
     private val application: Application,
@@ -187,6 +196,32 @@ class HomeViewModel(
     private val _logFeatures = MutableStateFlow(prefsManager.getAllLogFeatures())
     val logFeatures: StateFlow<Map<String, Boolean>> = _logFeatures.asStateFlow()
 
+    private val _serverUrl = MutableStateFlow(prefsManager.serverUrl)
+    val serverUrl: StateFlow<String> = _serverUrl.asStateFlow()
+
+    private val _serverFeatures = MutableStateFlow(prefsManager.getAllServerFeatures())
+    val serverFeatures: StateFlow<Map<String, Boolean>> = _serverFeatures.asStateFlow()
+
+    private val _authToken = MutableStateFlow(prefsManager.authToken)
+    val authToken: StateFlow<String> = _authToken.asStateFlow()
+
+    private val _dbName = MutableStateFlow(prefsManager.dbName)
+    val dbName: StateFlow<String> = _dbName.asStateFlow()
+
+    private val _serverHealth = MutableStateFlow(readServerHealth())
+    val serverHealth: StateFlow<ServerHealth> = _serverHealth.asStateFlow()
+
+    private fun readServerHealth(): ServerHealth {
+        val lastChecked = prefsManager.serverLastCheckedMs
+        if (lastChecked == 0L) return ServerHealth.Unknown
+        return if (prefsManager.serverLastSuccess) ServerHealth.Connected
+        else ServerHealth.Failure("Dernier envoi échoué")
+    }
+
+    fun refreshServerHealth() {
+        _serverHealth.value = readServerHealth()
+    }
+
     fun toggleShowFeature(feature: String) {
         val current = _showFeatures.value.toMutableMap()
         current[feature] = !(current[feature] ?: true)
@@ -199,6 +234,66 @@ class HomeViewModel(
         current[feature] = !(current[feature] ?: true)
         _logFeatures.value = current
         prefsManager.setLogFeature(feature, current[feature] ?: true)
+    }
+
+    fun toggleServerFeature(feature: String) {
+        val current = _serverFeatures.value.toMutableMap()
+        current[feature] = !(current[feature] ?: false)
+        _serverFeatures.value = current
+        prefsManager.setServerFeature(feature, current[feature] ?: false)
+    }
+
+    fun updateServerUrl(url: String) {
+        val trimmed = url.trim()
+        prefsManager.serverUrl = trimmed
+        _serverUrl.value = trimmed
+    }
+
+    fun updateAuthToken(token: String) {
+        prefsManager.authToken = token
+        _authToken.value = token
+    }
+
+    fun updateDbName(name: String) {
+        val trimmed = name.trim()
+        prefsManager.dbName = trimmed
+        _dbName.value = trimmed
+    }
+
+    fun testServerConnection(
+        url: String,
+        token: String,
+        onResult: (ServerHealth) -> Unit
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val client = OkHttpClient.Builder()
+                    .connectTimeout(5, TimeUnit.SECONDS)
+                    .readTimeout(5, TimeUnit.SECONDS)
+                    .build()
+                val request = Request.Builder()
+                    .url("$url/health")
+                    .apply {
+                        if (token.isNotBlank()) addHeader("Authorization", "Token $token")
+                    }
+                    .build()
+                val response = client.newCall(request).execute()
+                val success = response.isSuccessful
+                response.close()
+                prefsManager.serverLastSuccess = success
+                prefsManager.serverLastCheckedMs = System.currentTimeMillis()
+                val health = if (success) ServerHealth.Connected
+                else ServerHealth.Failure("Code: ${response.code}")
+                _serverHealth.value = health
+                withContext(Dispatchers.Main) { onResult(health) }
+            } catch (e: Exception) {
+                prefsManager.serverLastSuccess = false
+                prefsManager.serverLastCheckedMs = System.currentTimeMillis()
+                val health = ServerHealth.Failure(e.message ?: "Erreur inconnue")
+                _serverHealth.value = health
+                withContext(Dispatchers.Main) { onResult(health) }
+            }
+        }
     }
 
     private fun getActiveFeatures(): Set<String> = prefsManager.getActiveFeatures()

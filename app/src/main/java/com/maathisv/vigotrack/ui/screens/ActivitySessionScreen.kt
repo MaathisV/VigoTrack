@@ -39,6 +39,7 @@ import com.maathisv.vigotrack.ui.components.SessionStatusCard
 import com.maathisv.vigotrack.ui.components.StartStopControls
 import com.maathisv.vigotrack.ui.components.buildDisplayLinks
 import com.maathisv.vigotrack.ui.viewmodel.HomeViewModel
+import com.maathisv.vigotrack.ui.viewmodel.ServerHealth
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,6 +56,7 @@ fun ActivitySessionScreen(
     val preLinks by homeViewModel.sensorPatientLinks.collectAsState()
     val patients by homeViewModel.patients.collectAsState()
     val showFeatures by homeViewModel.showFeatures.collectAsState()
+    val serverHealth by homeViewModel.serverHealth.collectAsState()
 
     val activity = allActivities.find { it.id == activityId }
 
@@ -101,7 +103,8 @@ fun ActivitySessionScreen(
             AppTopBar(
                 title = if (activity?.isRunning == true) "En cours"
                         else currentType?.let { ct -> allActivityTypes.find { it.name == ct.name }?.displayName ?: ct.displayName } ?: "Session",
-                onBack = onBack
+                onBack = onBack,
+                serverHealth = serverHealth
             )
         }
     ) { padding ->

@@ -10,10 +10,13 @@ import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.maathisv.vigotrack.R
 import com.maathisv.vigotrack.VigoTrackApplication
+import com.maathisv.vigotrack.util.InfluxDbExporter
+import com.maathisv.vigotrack.util.InfluxLineProtocolSerializer
 import com.maathisv.vigotrack.repository.SensorRepository
 import com.maathisv.vigotrack.sensor.api.SensorDataPoint
 import com.maathisv.vigotrack.util.DataLogger
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -88,6 +91,40 @@ class SensorService : LifecycleService() {
                         )
                     }
                     observeSensorData(logFeatures)
+                }
+
+                val serverFeatures = setOf("HR", "PPI", "ACC", "ECG").filter {
+                    prefs.getBoolean("server_$it", false)
+                }.toSet()
+                if (serverFeatures.isNotEmpty()) {
+                    val svUrl = prefs.getString("server_url", "") ?: ""
+                    if (svUrl.isNotBlank()) {
+                        val token = prefs.getString("auth_token", "") ?: ""
+                        val dbName = prefs.getString("db_name", "vigotrack") ?: "vigotrack"
+                        val serializer = InfluxLineProtocolSerializer(authToken = token, dbName = dbName)
+                        lifecycleScope.launch {
+                            val savedSensors = repository.savedSensors.first()
+                            val vendorMap = sensorIds.associateWith { id ->
+                                savedSensors.find { it.deviceId == id }?.vendor ?: "Unknown"
+                            }
+                            InfluxDbExporter(
+                                serverUrl = svUrl,
+                                activityId = activityId,
+                                activeFeatures = serverFeatures,
+                                serializer = serializer,
+                                onSendResult = { success ->
+                                    prefs.edit()
+                                        .putBoolean("server_last_success", success)
+                                        .putLong("server_last_checked_ms", System.currentTimeMillis())
+                                        .apply()
+                                },
+                                stageName = stageName,
+                                activityName = activityName,
+                                activityCategory = activityCategory,
+                                vendorMap = vendorMap
+                            ).observe(repository.sensorDataFlow, lifecycleScope)
+                        }
+                    }
                 }
             }
             ACTION_STOP_STREAMS -> {

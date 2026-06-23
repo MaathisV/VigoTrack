@@ -13,11 +13,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import com.maathisv.vigotrack.models.ConnectionState
 import com.maathisv.vigotrack.models.Patient
 import com.maathisv.vigotrack.models.Sensor
 import com.maathisv.vigotrack.models.SensorPatientLink
 import com.maathisv.vigotrack.ui.viewmodel.HomeViewModel
+import com.maathisv.vigotrack.ui.viewmodel.ServerHealth
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -33,6 +35,15 @@ fun ConfigDialog(
     namingTemplate: String,
     showFeatures: Map<String, Boolean>,
     logFeatures: Map<String, Boolean>,
+    serverUrl: String,
+    serverFeatures: Map<String, Boolean>,
+    serverHealth: ServerHealth = ServerHealth.Unknown,
+    authToken: String = "",
+    dbName: String = "vigotrack",
+    onUpdateAuthToken: (String) -> Unit = {},
+    onUpdateDbName: (String) -> Unit = {},
+    onScanQrCode: () -> Unit = {},
+    onTestServerConnection: () -> Unit = {},
     availableSettings: Map<String, Map<String, Set<Int>>> = emptyMap(),
     selectedSettings: Map<String, Pair<Int, Int>> = emptyMap(),
     deviceAvailableDataTypes: Map<String, Set<String>> = emptyMap(),
@@ -51,6 +62,8 @@ fun ConfigDialog(
     onDeleteSensorPatientLink: (SensorPatientLink) -> Unit,
     onToggleShowFeature: (String) -> Unit,
     onToggleLogFeature: (String) -> Unit,
+    onToggleServerFeature: (String) -> Unit = {},
+    onUpdateServerUrl: (String) -> Unit = {},
     onSensorSettingsChanged: (String, String, Int, Int) -> Unit = { _, _, _, _ -> },
     onQuerySettings: (String) -> Unit = {}
 ) {
@@ -110,11 +123,22 @@ fun ConfigDialog(
                     namingTemplate = namingTemplate,
                     showFeatures = showFeatures,
                     logFeatures = logFeatures,
+                    serverUrl = serverUrl,
+                    serverFeatures = serverFeatures,
+                    serverHealth = serverHealth,
+                    authToken = authToken,
+                    dbName = dbName,
                     onPickLogFolder = onPickLogFolder,
                     onTemplateChange = onTemplateChange,
                     onResetTemplate = onResetTemplate,
                     onToggleShowFeature = onToggleShowFeature,
-                    onToggleLogFeature = onToggleLogFeature
+                    onToggleLogFeature = onToggleLogFeature,
+                    onToggleServerFeature = onToggleServerFeature,
+                    onUpdateServerUrl = onUpdateServerUrl,
+                    onUpdateAuthToken = onUpdateAuthToken,
+                    onUpdateDbName = onUpdateDbName,
+                    onScanQrCode = onScanQrCode,
+                    onTestServerConnection = onTestServerConnection
                 )
             }
         },
@@ -135,6 +159,9 @@ fun ConfigDialog(
     LaunchedEffect(show) {
         if (show) homeViewModel.startScanning()
     }
+    LaunchedEffect(show) {
+        if (show) homeViewModel.refreshServerHealth()
+    }
     if (!show) return
     val deviceConnectionStates by homeViewModel.deviceConnectionStates.collectAsState()
     val scannedDevices by homeViewModel.scannedDevices.collectAsState()
@@ -147,9 +174,15 @@ fun ConfigDialog(
     val namingTemplate by homeViewModel.namingTemplate.collectAsState()
     val showFeatures by homeViewModel.showFeatures.collectAsState()
     val logFeatures by homeViewModel.logFeatures.collectAsState()
+    val serverUrl by homeViewModel.serverUrl.collectAsState()
+    val serverFeatures by homeViewModel.serverFeatures.collectAsState()
+    val serverHealth by homeViewModel.serverHealth.collectAsState()
+    val authToken by homeViewModel.authToken.collectAsState()
+    val dbName by homeViewModel.dbName.collectAsState()
     val availableSettings by homeViewModel.availableSettings.collectAsState()
     val selectedSettings by homeViewModel.selectedSettings.collectAsState()
     val deviceDataTypes by homeViewModel.deviceAvailableDataTypes.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
     ConfigDialog(
         scannedDevices = scannedDevices,
         connectedDevicesList = connectedDevicesList,
@@ -162,6 +195,35 @@ fun ConfigDialog(
         namingTemplate = namingTemplate,
         showFeatures = showFeatures,
         logFeatures = logFeatures,
+        serverUrl = serverUrl,
+        serverFeatures = serverFeatures,
+        serverHealth = serverHealth,
+        authToken = authToken,
+        dbName = dbName,
+        onUpdateAuthToken = { homeViewModel.updateAuthToken(it) },
+        onUpdateDbName = { homeViewModel.updateDbName(it) },
+        onTestServerConnection = {
+            val url = serverUrl
+            val token = authToken
+            if (url.isNotBlank()) {
+                homeViewModel.testServerConnection(url, token) { /* UI update handled by StateFlow */ }
+            }
+        },
+        onScanQrCode = {
+            GmsBarcodeScanning.getClient(context)
+                .startScan()
+                .addOnSuccessListener { barcode ->
+                    val raw = barcode.rawValue ?: return@addOnSuccessListener
+                    if ("|" in raw) {
+                        val parts = raw.split("|", limit = 3)
+                        homeViewModel.updateServerUrl(parts[0])
+                        if (parts.size >= 2) homeViewModel.updateAuthToken(parts[1])
+                        if (parts.size >= 3) homeViewModel.updateDbName(parts[2])
+                    } else {
+                        homeViewModel.updateAuthToken(raw)
+                    }
+                }
+        },
         availableSettings = availableSettings,
         selectedSettings = selectedSettings,
         deviceAvailableDataTypes = deviceDataTypes,
@@ -182,6 +244,8 @@ fun ConfigDialog(
         onDeleteSensorPatientLink = { link -> homeViewModel.deleteSensorPatientLink(link) },
         onToggleShowFeature = { feature -> homeViewModel.toggleShowFeature(feature) },
         onToggleLogFeature = { feature -> homeViewModel.toggleLogFeature(feature) },
+        onToggleServerFeature = { feature -> homeViewModel.toggleServerFeature(feature) },
+        onUpdateServerUrl = { url -> homeViewModel.updateServerUrl(url) },
         onSensorSettingsChanged = { deviceId, feature, rate, resolution ->
             homeViewModel.setSensorSettings(deviceId, feature, rate, resolution)
         },

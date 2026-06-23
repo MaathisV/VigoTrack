@@ -35,6 +35,34 @@ class PreferencesManager(context: Context) {
 
     fun getAllLogFeatures(): Map<String, Boolean> = FEATURES.associateWith { isLogFeatureEnabled(it) }
 
+    var serverUrl: String
+        get() = prefs.getString("server_url", "") ?: ""
+        set(value) = prefs.edit { putString("server_url", value) }
+
+    var authToken: String
+        get() = prefs.getString("auth_token", "") ?: ""
+        set(value) = prefs.edit { putString("auth_token", value) }
+
+    var dbName: String
+        get() = prefs.getString("db_name", "vigotrack") ?: "vigotrack"
+        set(value) = prefs.edit { putString("db_name", value) }
+
+    fun isServerFeatureEnabled(feature: String): Boolean = prefs.getBoolean("server_$feature", false)
+
+    fun setServerFeature(feature: String, enabled: Boolean) {
+        prefs.edit { putBoolean("server_$feature", enabled) }
+    }
+
+    fun getAllServerFeatures(): Map<String, Boolean> = FEATURES.associateWith { isServerFeatureEnabled(it) }
+
+    var serverLastSuccess: Boolean
+        get() = prefs.getBoolean("server_last_success", false)
+        set(value) = prefs.edit { putBoolean("server_last_success", value) }
+
+    var serverLastCheckedMs: Long
+        get() = prefs.getLong("server_last_checked_ms", 0L)
+        set(value) = prefs.edit { putLong("server_last_checked_ms", value) }
+
     fun getActiveFeatures(): Set<String> {
         return FEATURES.filter { isShowFeatureEnabled(it) || isLogFeatureEnabled(it) }.toSet()
     }
