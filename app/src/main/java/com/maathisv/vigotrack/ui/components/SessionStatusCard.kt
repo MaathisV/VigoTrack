@@ -33,7 +33,8 @@ import java.util.Locale
 fun SessionStatusCard(
     activity: ActivitySession,
     onMarkStale: () -> Unit = {},
-    onUnmarkStale: () -> Unit = {}
+    onUnmarkStale: () -> Unit = {},
+    onEdit: (ActivitySession) -> Unit = {}
 ) {
     val dateFormat = remember { SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()) }
     var showMenu by remember { mutableStateOf(false) }
@@ -54,7 +55,7 @@ fun SessionStatusCard(
                         color = if (activity.isStale) MaterialTheme.colorScheme.onErrorContainer
                         else MaterialTheme.colorScheme.onSurface
                     )
-                    Text(text = "Type : ${activity.activityType.displayName}")
+                    Text(text = "Type : ${activity.customName ?: activity.activityType.displayName}")
                     Text(text = "Date : ${dateFormat.format(Date(activity.scheduledDate))}")
                 }
                 Box {
@@ -65,6 +66,13 @@ fun SessionStatusCard(
                         expanded = showMenu,
                         onDismissRequest = { showMenu = false }
                     ) {
+                        DropdownMenuItem(
+                            text = { Text("Modifier") },
+                            onClick = {
+                                showMenu = false
+                                onEdit(activity)
+                            }
+                        )
                         if (activity.isStale) {
                             DropdownMenuItem(
                                 text = { Text("Annuler l'invalidation") },

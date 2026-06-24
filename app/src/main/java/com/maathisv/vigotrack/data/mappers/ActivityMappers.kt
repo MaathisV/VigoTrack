@@ -19,6 +19,7 @@ fun ActivityWithLinks.toDomain(): ActivitySession {
         isRunning = activity.isRunning,
         stageId = activity.stageId,
         isStale = activity.isStale,
+        customName = activity.customName,
         links = links.map { it.toDomain() }
     )
 }
@@ -42,7 +43,8 @@ fun ActivitySession.toEntity(): ActivitySessionEntity {
         accumulatedTimeMs = accumulatedTimeMs,
         isRunning = isRunning,
         stageId = stageId,
-        isStale = isStale
+        isStale = isStale,
+        customName = customName
     )
 }
 
