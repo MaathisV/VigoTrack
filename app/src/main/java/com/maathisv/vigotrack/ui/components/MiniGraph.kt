@@ -4,7 +4,9 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -20,8 +22,13 @@ fun MiniGraph(
     maxPoints: Int = 100,
     rateLimitMs: Long = 100L
 ) {
-    val buffer = remember { mutableStateListOf<Float>() }
-    val lastPushTime = remember { mutableLongStateOf(0L) }
+    val buffer = rememberSaveable(
+        saver = listSaver(
+            save = { it.toList() },
+            restore = { it.toMutableStateList() }
+        )
+    ) { mutableStateListOf<Float>() }
+    val lastPushTime = rememberSaveable { mutableLongStateOf(0L) }
 
     if (currentValue != null) {
         val now = System.currentTimeMillis()
