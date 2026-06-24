@@ -18,6 +18,7 @@ import com.maathisv.vigotrack.models.Patient
 import com.maathisv.vigotrack.models.Sensor
 import com.maathisv.vigotrack.models.SensorPatientLink
 
+private val featureDisplayName = mapOf("HR" to "FC", "PPI" to "PPI", "ACC" to "ACC", "ECG" to "ECG", "EULER" to "EULER", "QUATERNION" to "QUATERNION", "FREE_ACCELERATION" to "FREE_ACCELERATION")
 
 data class DisplayLink(
     val patientId: Long?,
@@ -92,7 +93,7 @@ fun PatientCheckboxRow(
             Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
                 Text(displayItem.patientName, style = MaterialTheme.typography.bodyLarge)
                 Text(
-                    text = "${displayItem.sensorDisplayName ?: displayItem.sensorId} — ${displayItem.features.joinToString(", ")}",
+                    text = "${displayItem.sensorDisplayName ?: displayItem.sensorId} — ${displayItem.features.joinToString(", ") { featureDisplayName[it] ?: it }}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

@@ -91,7 +91,7 @@ fun SensorDataCard(
 
     val features = listOfNotNull(
         if (link.streamHR && showFeatures.getOrDefault("HR", true)) FeatureData(
-            label = "HR", valueText = "${hrValue?.toInt() ?: "--"}", unit = "bpm",
+            label = "FC", valueText = "${hrValue?.toInt() ?: "--"}", unit = "bpm",
             valueColor = MaterialTheme.colorScheme.primary,
             graphValue = hrValue, graphColor = MaterialTheme.colorScheme.primary
         ) else null,
@@ -214,7 +214,7 @@ fun CompactSensorDataCard(
                 Spacer(modifier = Modifier.height(2.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (link.streamHR && showFeatures.getOrDefault("HR", true)) {
-                        Text("HR: ${hrValue ?: "--"}", style = MaterialTheme.typography.bodySmall)
+                        Text("FC: ${hrValue ?: "--"}", style = MaterialTheme.typography.bodySmall)
                     }
                     if (link.streamPPI && showFeatures.getOrDefault("PPI", true)) {
                         Text("PPI: ${ppiValue ?: "--"}", style = MaterialTheme.typography.bodySmall)

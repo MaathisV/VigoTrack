@@ -298,7 +298,7 @@ fun ConfigSettingsTab(
                     Text("{activity_id} - Identifiant unique de l'activité")
                     Text("{sensor} - Identifiant du capteur")
                     Text("{device} - Alias de {sensor}")
-                    Text("{tag} - Type de flux de données (HR, PPI, ACC, ECG)")
+                    Text("{tag} - Type de flux de données (FC, PPI, ACC, ECG)")
                     Text("{date} - Date (AAAA-MM-JJ)")
                     Text("{time} - Heure (HH-MM-SS)")
                     Text("{datetime} - Date_heure combinée")
