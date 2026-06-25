@@ -1,11 +1,7 @@
 package com.maathisv.vigotrack.sensor.polar
 
-import android.Manifest
-import android.bluetooth.BluetoothDevice
-import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.util.Log
-import androidx.annotation.RequiresPermission
 import com.maathisv.vigotrack.sensor.api.ScannedDevice
 import com.maathisv.vigotrack.sensor.api.SensorDataType
 import com.maathisv.vigotrack.sensor.api.SensorEvent
@@ -67,6 +63,7 @@ class PolarVendorApi(
     private val pendingStreams = mutableMapOf<String, MutableList<Pair<SensorDataType, Any?>>>()
 
     init {
+        api.setAutomaticReconnection(true)
         setupCallbacks()
     }
 
@@ -166,28 +163,6 @@ class PolarVendorApi(
         pendingStreams.remove(deviceId)
         readyDevices.remove(deviceId)
         api.disconnectFromDevice(deviceId)
-    }
-
-    override suspend fun forceReconnect(deviceId: String, address: String): Boolean {
-        Log.d("PolarVendorApi", "forceReconnect: $deviceId ($address)")
-        disconnectFromDevice(deviceId)
-        val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-        val device = bluetoothManager.adapter?.getRemoteDevice(address) ?: return false
-        // Start SDK scan FIRST so it's running when the bond breaks
-        connectToDevice(deviceId)
-        // THEN remove the OS bond — device advertises, the running scan catches it
-        removeBond(device)
-        return true
-    }
-
-    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
-    private fun removeBond(device: BluetoothDevice) {
-        try {
-            device::class.java.getMethod("removeBond").invoke(device)
-            Log.d("PolarVendorApi", "removeBond called for ${device.address}")
-        } catch (e: Exception) {
-            Log.e("PolarVendorApi", "removeBond failed for ${device.address}", e)
-        }
     }
 
     override fun getAvailableDataTypes(deviceId: String): Set<SensorDataType> {

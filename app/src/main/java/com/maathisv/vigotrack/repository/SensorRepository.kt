@@ -1,15 +1,7 @@
 package com.maathisv.vigotrack.repository
 
-import android.Manifest
-import android.bluetooth.BluetoothDevice
-import android.bluetooth.BluetoothManager
-import android.bluetooth.BluetoothProfile
-import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
 import android.util.Log
-import androidx.annotation.RequiresPermission
 import com.maathisv.vigotrack.data.SensorDataSource
 import com.maathisv.vigotrack.models.ActivitySession
 import com.maathisv.vigotrack.models.ConnectionState
@@ -90,7 +82,6 @@ class SensorRepository(
 
     init {
         observeVendorEvents()
-        registerBleAclReceiver()
     }
 
     private fun observeVendorEvents() {
@@ -163,28 +154,12 @@ class SensorRepository(
         }
     }
 
-    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
-    private suspend fun connectWithRetry(deviceId: String, vendorName: String = "polar", address: String? = null, maxRetries: Int = 3) {
+    private suspend fun connectWithRetry(deviceId: String, vendorName: String = "polar", maxRetries: Int = 3) {
         if (!connectingLock.add(deviceId)) {
             Log.d(tag, "Connection already in progress for $deviceId, skipping")
             return
         }
         try {
-            if (address != null && isDeviceSystemConnected(address) && deviceId !in _connectedDeviceIds.value) {
-                Log.d(tag, "Force-reconnecting to system-connected device: $deviceId")
-                _deviceConnectionStates.update { it + (deviceId to ConnectionState.CONNECTING) }
-                try {
-                    val dropped = vendorRegistry.forceReconnect(deviceId, address, vendorName)
-                    if (!dropped) {
-                        Log.e(tag, "forceReconnect returned false for $deviceId, falling back")
-                        vendorRegistry.connectToDevice(deviceId, vendorName)
-                    }
-                } catch (e: Exception) {
-                    Log.e(tag, "Failed to re-establish session for $deviceId", e)
-                    _deviceConnectionStates.update { it + (deviceId to ConnectionState.NOT_CONNECTED) }
-                }
-                return
-            }
             _deviceConnectionStates.update { it + (deviceId to ConnectionState.CONNECTING) }
             repeat(maxRetries) { attempt ->
                 try {
@@ -201,18 +176,6 @@ class SensorRepository(
             Log.e(tag, "Could not reconnect to $deviceId after $maxRetries attempts")
         } finally {
             connectingLock.remove(deviceId)
-        }
-    }
-
-    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
-    private fun isDeviceSystemConnected(address: String): Boolean {
-        return try {
-            val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
-            val adapter = bluetoothManager.adapter ?: return false
-            val device = adapter.getRemoteDevice(address)
-            bluetoothManager.getConnectionState(device, BluetoothProfile.GATT) == BluetoothProfile.STATE_CONNECTED
-        } catch (e: Exception) {
-            false
         }
     }
 
@@ -288,32 +251,6 @@ class SensorRepository(
         }
     }
 
-    private fun registerBleAclReceiver() {
-        val filter = IntentFilter(BluetoothDevice.ACTION_ACL_CONNECTED)
-        context.applicationContext.registerReceiver(bleAclReceiver, filter)
-    }
-
-    private val bleAclReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            val device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
-            val macAddress = device?.address ?: return
-            if (intent.action == BluetoothDevice.ACTION_ACL_CONNECTED) {
-                handleSystemBleReconnection(macAddress)
-            }
-        }
-    }
-
-    private fun handleSystemBleReconnection(macAddress: String) {
-        repositoryScope.launch {
-            val knownDevices = dataSource.getSavedSensors().first()
-            val saved = knownDevices.firstOrNull { it.deviceId == macAddress || it.address == macAddress }
-            if (saved != null && saved.deviceId !in _connectedDeviceIds.value) {
-                Log.d(tag, "System BLE reconnection detected for: ${saved.deviceId}")
-                connectWithRetry(saved.deviceId, saved.vendor, saved.address)
-            }
-        }
-    }
-
     fun startScanning() {
         _discoveredDevices.value = emptySet()
         vendorRegistry.allScanResults()
@@ -330,7 +267,7 @@ class SensorRepository(
     }
 
     suspend fun connectToDevice(sensor: Sensor) {
-        connectWithRetry(sensor.deviceId, sensor.vendor, sensor.address)
+        connectWithRetry(sensor.deviceId, sensor.vendor)
     }
 
     fun requestDisconnect(deviceId: String) {
