@@ -14,11 +14,12 @@ VigoTrack is an Android application built with Kotlin and Jetpack Compose that c
 
 ## Screenshots
 
-<!-- TODO: Add screenshots -->
-<!-- ![Stages List](url) -->
-<!-- ![Live Session](url) -->
-<!-- ![Bilan Grid](url) -->
-<!-- ![Settings](url) -->
+<img src="docs/StageList.jpg" alt="Stages List" width="240"/>
+<img src="docs/ActivitySession.jpg" alt="Activity Session" width="240"/>
+<img src="docs/ActivitySession_Compact.jpg" alt="Activity Session (Compact)" width="240"/>
+<img src="docs/BilansScreens.jpg" alt="Bilan Grid" width="240"/>
+<img src="docs/Devices_Settings.jpg" alt="Devices & Settings" width="240"/>
+<img src="docs/ActivityList.jpg" alt="Activity List" width="240"/>
 
 ---
 
@@ -28,12 +29,13 @@ VigoTrack is an Android application built with Kotlin and Jetpack Compose that c
 - **Activity Sessions** — Create data-collection sessions with types: MARCHE, APA, HIIT, RENFORCEMENT, PISCINE, TDM6, 10m walk test, REPOS
 - **Bilan Grid** — Matrix view of patients vs. assessment types for quick recording
 - **Multi-Vendor BLE** — Connect to Polar and Xsens Dot devices simultaneously via a pluggable `VendorApi` abstraction
-- **Real-Time Streaming** — Live HR, PPI, Accelerometer (X/Y/Z), ECG, Euler angles, Quaternion, and Free Acceleration with Canvas-based mini-graphs
+- **Real-Time Streaming** — Live FC (heart rate), PPI, Accelerometer (X/Y/Z), ECG, Euler angles, Quaternion, and Free Acceleration with Canvas-based mini-graphs
 - **Compact / Graph Toggle** — Switch between full sensor cards with mini-graphs and a compact data row view
 - **Per-Feature Visibility & Logging** — Independently toggle which data features display on screen and which are written to CSV per sensor
 - **Activity Invalidation** — Mark completed activities as invalid (`INVALIDÉ`) via a 3-dot menu, with `errorContainer` visual styling
 - **Resume Completed Activities** — Reprise button to restart streaming on previously completed sessions
 - **Accumulated Time** — Elapsed time persists across pauses, resumes, and app restarts
+- **Editable Activity Name & Date** — Rename or reschedule an activity at any time via the dropdown menu on its card
 - **Patient Management** — Add/delete patients, pre-link them to sensors with default feature selections
 - **Data Export** — Log all streamed data to structured files using Android SAF with a customizable file naming template
 - **Foreground Service** — Keeps BLE connections alive and data streaming in the background via `SensorService`
@@ -73,14 +75,9 @@ Open in Android Studio, sync Gradle, and run on a connected device.
 
 ### Config Import
 
-You can bulk-import patients, stages, activities, and sensor links from a JSON file. Tap the **+** FAB on the main screen and select **Importer une config**, then pick a JSON file. A preview shows the counts of items to create.
+Bulk-import patients, stages, activities, and sensor links from a JSON file. Tap the **+** FAB on the main screen and select **Importer une config**, then pick a JSON file. A preview shows the counts of items to create. On confirmation, new records are created and a result dialog reports created, skipped, or errored items. Unknown activity type names are automatically added as custom types.
 
-The JSON format supports:
-- **patients** — Array of patient names
-- **stages** — Each with `name`, `startDate`, `endDate`, and nested `activities` / `bilans`
-- **activities** — Each with `type`, `scheduledDate`, and optional `links` (patient, sensor, features)
-
-On confirmation, new patients, stages, activities, and sensor-patient links are created. Unknown activity type names are automatically added as custom types. A result dialog reports created, skipped, or errored items.
+Full JSON schema and an example file are documented in [docs/config_import.md](docs/config_import.md).
 
 ### Stages
 
@@ -123,7 +120,7 @@ Use the **Patients** tab to pre-configure patient-sensor-feature associations. S
 During an active session, each linked patient displays color-coded cards showing live values for the streamed data types. Use the **Graph** / **Compact** toggle to switch between full cards (with mini line charts) and a dense data row view.
 
 Available data types (each independently togglable for display and logging via the devices dialog):
-- **HR** — Beats per minute
+- **FC** — Fréquence Cardiaque (beats per minute)
 - **PPI** — Pulse-to-pulse interval in ms
 - **ACC** — Accelerometer magnitude in m/s²
 - **ECG** — Voltage in µV
