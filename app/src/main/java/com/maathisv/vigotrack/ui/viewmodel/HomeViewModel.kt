@@ -609,6 +609,22 @@ class HomeViewModel(
         }
     }
 
+    fun updateActivityName(activityId: String, customName: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val activities = activityRepo.allActivities.first()
+            val activity = activities.find { it.id == activityId } ?: return@launch
+            activityRepo.updateActivity(activity.copy(customName = customName))
+        }
+    }
+
+    fun updateActivityDate(activityId: String, newDate: Long) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val activities = activityRepo.allActivities.first()
+            val activity = activities.find { it.id == activityId } ?: return@launch
+            activityRepo.updateActivity(activity.copy(scheduledDate = newDate))
+        }
+    }
+
     fun markActivityAsStale(activityId: String) {
         viewModelScope.launch(Dispatchers.IO) {
             val activities = activityRepo.allActivities.first()

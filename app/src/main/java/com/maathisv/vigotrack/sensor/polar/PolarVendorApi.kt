@@ -14,11 +14,13 @@ import com.polar.androidcommunications.api.ble.model.DisInfo
 import com.polar.sdk.api.PolarBleApi
 import com.polar.sdk.api.PolarBleApiCallback
 import com.polar.sdk.api.PolarBleApiDefaultImpl
+import com.polar.androidcommunications.api.ble.exceptions.BleControlPointCommandError
+import com.polar.androidcommunications.api.ble.exceptions.BleServiceNotFound
+import com.polar.androidcommunications.api.ble.model.gatt.client.pmd.PmdControlPointResponse.PmdControlPointResponseCode
 import com.polar.sdk.api.errors.PolarDeviceNotFound
 import com.polar.sdk.api.model.PolarDeviceInfo
 import com.polar.sdk.api.model.PolarHealthThermometerData
 import com.polar.sdk.api.model.PolarSensorSetting
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -49,7 +51,6 @@ class PolarVendorApi(
         PolarBleApiDefaultImpl.defaultImplementation(
             context,
             setOf(
-                PolarBleApi.PolarBleSdkFeature.FEATURE_HR,
                 PolarBleApi.PolarBleSdkFeature.FEATURE_DEVICE_INFO,
                 PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_ONLINE_STREAMING,
                 PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_OFFLINE_RECORDING,
@@ -62,7 +63,7 @@ class PolarVendorApi(
     override val events: Flow<SensorEvent> = _events.asSharedFlow()
 
     private val activeStreamJobs = mutableMapOf<Pair<String, SensorDataType>, Job>()
-    private val gattReadyDevices = mutableSetOf<String>()
+    private val readyDevices = mutableSetOf<String>()
     private val pendingStreams = mutableMapOf<String, MutableList<Pair<SensorDataType, Any?>>>()
 
     init {
@@ -93,7 +94,7 @@ class PolarVendorApi(
                 val deviceId = polarDeviceInfo.deviceId
                 activeStreamJobs.filterKeys { it.first == deviceId }.values.forEach { it.cancel() }
                 activeStreamJobs.keys.filter { it.first == deviceId }.forEach { activeStreamJobs.remove(it) }
-                gattReadyDevices.remove(deviceId)
+                readyDevices.remove(deviceId)
                 _events.tryEmit(SensorEvent.DeviceDisconnected(deviceId))
             }
 
@@ -111,38 +112,29 @@ class PolarVendorApi(
                         }
                     }
                     PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_ONLINE_STREAMING -> {
-                        gattReadyDevices.add(identifier)
-                        scope.launch {
-                            try {
-                                val types = api.getAvailableOnlineStreamDataTypes(identifier)
-                                val mapped = types.mapNotNull { it.toSensorDataType() }.toSet()
-                                _events.tryEmit(SensorEvent.FeaturesReady(identifier, mapped))
-                            } catch (e: Exception) {
-                                Log.e("PolarVendorApi", "Failed to get stream types", e)
-                            }
-                            yield()
-                            pendingStreams.remove(identifier)?.forEach { (dataType, settings) ->
-                                startStreamNow(identifier, dataType, settings)
-                            }
-                        }
-                    }
-                    PolarBleApi.PolarBleSdkFeature.FEATURE_HR -> {
-                        scope.launch {
-                            try {
-                                val types = api.getAvailableHRServiceDataTypes(identifier)
-                                val mapped = types.mapNotNull { it.toSensorDataType() }.toSet()
-                                _events.tryEmit(SensorEvent.FeaturesReady(identifier, mapped))
-                            } catch (e: Exception) {
-                                Log.e("PolarVendorApi", "Failed to get HR types", e)
-                            }
-                        }
+                        Log.d("PolarVendorApi", "Online streaming feature ready for $identifier")
                     }
                     else -> {}
                 }
             }
 
             override fun bleSdkFeaturesReadiness(identifier: String, ready: List<PolarBleApi.PolarBleSdkFeature>, unavailable: List<PolarBleApi.PolarBleSdkFeature>) {
-                Log.d("PolarVendorApi", "Features readiness for $identifier. Ready: $ready, Unavailable: $unavailable")
+                if (ready.contains(PolarBleApi.PolarBleSdkFeature.FEATURE_POLAR_ONLINE_STREAMING) && identifier !in readyDevices) {
+                    readyDevices.add(identifier)
+                    scope.launch {
+                        try {
+                            val types = api.getAvailableOnlineStreamDataTypes(identifier)
+                            val mapped = types.mapNotNull { it.toSensorDataType() }.toSet()
+                            _events.tryEmit(SensorEvent.FeaturesReady(identifier, mapped))
+                        } catch (e: Exception) {
+                            Log.e("PolarVendorApi", "Failed to get stream types", e)
+                        }
+                        yield()
+                        pendingStreams.remove(identifier)?.forEach { (dataType, settings) ->
+                            startStreamNow(identifier, dataType, settings)
+                        }
+                    }
+                }
             }
 
             override fun disInformationReceived(identifier: String, disInfo: DisInfo) {
@@ -172,7 +164,7 @@ class PolarVendorApi(
         activeStreamJobs.filterKeys { it.first == deviceId }.values.forEach { it.cancel() }
         activeStreamJobs.keys.filter { it.first == deviceId }.forEach { activeStreamJobs.remove(it) }
         pendingStreams.remove(deviceId)
-        gattReadyDevices.remove(deviceId)
+        readyDevices.remove(deviceId)
         api.disconnectFromDevice(deviceId)
     }
 
@@ -217,7 +209,7 @@ class PolarVendorApi(
 
     override fun startStreaming(deviceId: String, dataType: SensorDataType, settings: Any?) {
         if (activeStreamJobs.containsKey(deviceId to dataType)) return
-        if (deviceId in gattReadyDevices) {
+        if (deviceId in readyDevices) {
             startStreamNow(deviceId, dataType, settings)
         } else {
             pendingStreams.getOrPut(deviceId) { mutableListOf() }.add(dataType to settings)
@@ -249,7 +241,12 @@ class PolarVendorApi(
     private fun startHrStream(deviceId: String): Job =
         api.startHrStreaming(deviceId)
             .retry(3) { cause ->
-                if (cause is PolarDeviceNotFound) { delay(2000); true } else false
+                when {
+                    cause is PolarDeviceNotFound -> { delay(2000); true }
+                    cause is BleServiceNotFound -> { delay(2000); true }
+                    "timeline" in (cause.message ?: "") -> { delay(500); true }
+                    else -> false
+                }
             }
             .onEach { data ->
                 data.samples.forEach { sample ->
@@ -262,7 +259,13 @@ class PolarVendorApi(
     private fun startPpiStream(deviceId: String): Job =
         api.startPpiStreaming(deviceId)
             .retry(3) { cause ->
-                if (cause is PolarDeviceNotFound) { delay(2000); true } else false
+                when {
+                    cause is PolarDeviceNotFound -> { delay(2000); true }
+                    cause is BleServiceNotFound -> { delay(2000); true }
+                    "timeline" in (cause.message ?: "") -> { delay(500); true }
+                    cause is BleControlPointCommandError && cause.error == PmdControlPointResponseCode.ERROR_INVALID_STATE -> { delay(500); true }
+                    else -> false
+                }
             }
             .onEach { data ->
                 data.samples.forEach { sample ->
@@ -274,52 +277,54 @@ class PolarVendorApi(
 
     private fun startAccStream(deviceId: String, settings: PolarSensorSetting?): Job =
         scope.launch {
-            var retries = 0
-            while (retries < 3) {
-                try {
-                    val accSettings = settings ?: api.requestStreamSettings(deviceId, PolarBleApi.PolarDeviceDataType.ACC).maxSettings()
-                    api.startAccStreaming(deviceId, accSettings)
-                        .onEach { data ->
-                            data.toAccelerometerDataPoints().forEach { dp ->
-                                _events.tryEmit(SensorEvent.DataReceived(deviceId, dp))
-                            }
-                        }
-                        .catch { e -> Log.e("PolarVendorApi", "ACC stream fail", e) }
-                        .collect()
-                    break
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: PolarDeviceNotFound) {
-                    retries++; if (retries < 3) delay(2000) else Log.e("PolarVendorApi", "ACC failed", e)
-                } catch (e: Exception) {
-                    Log.e("PolarVendorApi", "ACC failed", e); break
-                }
+            val accSettings = settings ?: try {
+                api.requestStreamSettings(deviceId, PolarBleApi.PolarDeviceDataType.ACC).maxSettings()
+            } catch (e: Exception) {
+                Log.e("PolarVendorApi", "Failed to get ACC settings", e); return@launch
             }
+            api.startAccStreaming(deviceId, accSettings)
+                .retry(3) { cause ->
+                    when {
+                        cause is PolarDeviceNotFound -> { delay(2000); true }
+                        cause is BleServiceNotFound -> { delay(2000); true }
+                        "timeline" in (cause.message ?: "") -> { delay(500); true }
+                        cause is BleControlPointCommandError && cause.error == PmdControlPointResponseCode.ERROR_INVALID_STATE -> { delay(500); true }
+                        else -> false
+                    }
+                }
+                .onEach { data ->
+                    data.toAccelerometerDataPoints().forEach { dp ->
+                        _events.tryEmit(SensorEvent.DataReceived(deviceId, dp))
+                    }
+                }
+                .catch { e -> Log.e("PolarVendorApi", "ACC stream failed", e) }
+                .collect()
         }
 
     private fun startEcgStream(deviceId: String, settings: PolarSensorSetting?): Job =
         scope.launch {
-            var retries = 0
-            while (retries < 3) {
-                try {
-                    val ecgSettings = settings ?: api.requestStreamSettings(deviceId, PolarBleApi.PolarDeviceDataType.ECG).maxSettings()
-                    api.startEcgStreaming(deviceId, ecgSettings)
-                        .onEach { data ->
-                            data.toEcgDataPoints().forEach { dp ->
-                                _events.tryEmit(SensorEvent.DataReceived(deviceId, dp))
-                            }
-                        }
-                        .catch { e -> Log.e("PolarVendorApi", "ECG stream fail", e) }
-                        .collect()
-                    break
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: PolarDeviceNotFound) {
-                    retries++; if (retries < 3) delay(2000) else Log.e("PolarVendorApi", "ECG failed", e)
-                } catch (e: Exception) {
-                    Log.e("PolarVendorApi", "ECG failed", e); break
-                }
+            val ecgSettings = settings ?: try {
+                api.requestStreamSettings(deviceId, PolarBleApi.PolarDeviceDataType.ECG).maxSettings()
+            } catch (e: Exception) {
+                Log.e("PolarVendorApi", "Failed to get ECG settings", e); return@launch
             }
+            api.startEcgStreaming(deviceId, ecgSettings)
+                .retry(3) { cause ->
+                    when {
+                        cause is PolarDeviceNotFound -> { delay(2000); true }
+                        cause is BleServiceNotFound -> { delay(2000); true }
+                        "timeline" in (cause.message ?: "") -> { delay(500); true }
+                        cause is BleControlPointCommandError && cause.error == PmdControlPointResponseCode.ERROR_INVALID_STATE -> { delay(500); true }
+                        else -> false
+                    }
+                }
+                .onEach { data ->
+                    data.toEcgDataPoints().forEach { dp ->
+                        _events.tryEmit(SensorEvent.DataReceived(deviceId, dp))
+                    }
+                }
+                .catch { e -> Log.e("PolarVendorApi", "ECG stream failed", e) }
+                .collect()
         }
 
     override fun onForegroundEntered() {

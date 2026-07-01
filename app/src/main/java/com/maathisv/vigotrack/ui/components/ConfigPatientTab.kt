@@ -45,7 +45,7 @@ import com.maathisv.vigotrack.models.Sensor
 import com.maathisv.vigotrack.models.SensorPatientLink
 
 private val featureLabels = mapOf(
-    "HR" to "Fréquence cardiaque (HR)",
+    "HR" to "Fréquence cardiaque (FC)",
     "PPI" to "Intervalle PP (PPI)",
     "ACC" to "Accéléromètre (ACC)",
     "ECG" to "ECG"

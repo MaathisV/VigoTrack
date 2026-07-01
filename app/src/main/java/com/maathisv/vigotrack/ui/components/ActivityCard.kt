@@ -57,7 +57,7 @@ private fun formatDuration(startTime: Long?, endTime: Long?, isRunning: Boolean)
 
 
 @Composable
-fun ActivityCard(session: ActivitySession, onClick: () -> Unit, onMarkStale: (String) -> Unit = {}, onUnmarkStale: (String) -> Unit = {}) {
+fun ActivityCard(session: ActivitySession, onClick: () -> Unit, onMarkStale: (String) -> Unit = {}, onUnmarkStale: (String) -> Unit = {}, onEdit: (ActivitySession) -> Unit = {}) {
     val timeFormat = remember { SimpleDateFormat("HH:mm", Locale.getDefault()) }
     val patientNames = session.links.map { it.patientName }
     var showMenu by remember { mutableStateOf(false) }
@@ -98,7 +98,7 @@ fun ActivityCard(session: ActivitySession, onClick: () -> Unit, onMarkStale: (St
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        text = session.activityType.displayName,
+                        text = session.customName ?: session.activityType.displayName,
                         style = MaterialTheme.typography.bodyLarge,
                         color = if (session.isStale) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurface
                     )
@@ -155,6 +155,10 @@ fun ActivityCard(session: ActivitySession, onClick: () -> Unit, onMarkStale: (St
                     expanded = showMenu,
                     onDismissRequest = { showMenu = false }
                 ) {
+                    DropdownMenuItem(
+                        text = { Text("Modifier") },
+                        onClick = { showMenu = false; onEdit(session) }
+                    )
                     if (session.isStale) {
                         DropdownMenuItem(
                             text = { Text("Annuler l'invalidation") },

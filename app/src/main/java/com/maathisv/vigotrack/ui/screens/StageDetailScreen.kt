@@ -35,6 +35,7 @@ import com.maathisv.vigotrack.models.Stage
 import com.maathisv.vigotrack.ui.components.ActivityCard
 import com.maathisv.vigotrack.ui.components.AppTopBar
 import com.maathisv.vigotrack.ui.components.ConfigDialog
+import com.maathisv.vigotrack.ui.components.EditActivityDialog
 import com.maathisv.vigotrack.ui.viewmodel.HomeViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -55,6 +56,7 @@ fun StageDetailScreen(
     val activities by homeViewModel.getActivitiesForStage(stageId).collectAsState(initial = emptyList())
 
     var showConfigDialog by remember { mutableStateOf(false) }
+    var editActivity by remember { mutableStateOf<ActivitySession?>(null) }
 
     val context = LocalContext.current
 
@@ -96,7 +98,8 @@ fun StageDetailScreen(
                     onActivityClick(newId)
                 },
                 onMarkStale = { activityId -> homeViewModel.markActivityAsStale(activityId) },
-                onUnmarkStale = { activityId -> homeViewModel.unmarkActivityAsStale(activityId) }
+                onUnmarkStale = { activityId -> homeViewModel.unmarkActivityAsStale(activityId) },
+                onEdit = { editActivity = it }
             )
         }
     }
@@ -107,6 +110,18 @@ fun StageDetailScreen(
         onDismiss = { showConfigDialog = false },
         onPickLogFolder = { folderPickerLauncher.launch(null) }
     )
+
+    editActivity?.let { activity ->
+        EditActivityDialog(
+            activity = activity,
+            onDismiss = { editActivity = null },
+            onConfirm = { name, date ->
+                homeViewModel.updateActivityName(activity.id, name)
+                homeViewModel.updateActivityDate(activity.id, date)
+                editActivity = null
+            }
+        )
+    }
 }
 
 @Composable
@@ -117,7 +132,8 @@ private fun StageDetailContent(
     onActivityClick: (String) -> Unit,
     onRecordClick: () -> Unit,
     onMarkStale: (String) -> Unit = {},
-    onUnmarkStale: (String) -> Unit = {}
+    onUnmarkStale: (String) -> Unit = {},
+    onEdit: (ActivitySession) -> Unit = {}
 ) {
     val dateFormat = remember { SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()) }
     val dayFormat = remember { SimpleDateFormat("EEEE dd MMMM", Locale.getDefault()) }
@@ -174,7 +190,7 @@ private fun StageDetailContent(
                     )
                 }
                 items(dayActivities, key = { it.id }) { session ->
-                    ActivityCard(session = session, onClick = { onActivityClick(session.id) }, onMarkStale = onMarkStale, onUnmarkStale = onUnmarkStale)
+                    ActivityCard(session = session, onClick = { onActivityClick(session.id) }, onMarkStale = onMarkStale, onUnmarkStale = onUnmarkStale, onEdit = onEdit)
                 }
             }
         }

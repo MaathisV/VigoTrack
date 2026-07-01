@@ -28,11 +28,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.maathisv.vigotrack.models.ActivityCategory
+import com.maathisv.vigotrack.models.ActivitySession
 import com.maathisv.vigotrack.models.ActivityStatus
 import com.maathisv.vigotrack.models.ActivityType
 import com.maathisv.vigotrack.ui.components.ActivityTypeChips
 import com.maathisv.vigotrack.ui.components.AppTopBar
 import com.maathisv.vigotrack.ui.components.CompactSensorDataCard
+import com.maathisv.vigotrack.ui.components.EditActivityDialog
 import com.maathisv.vigotrack.ui.components.PatientCheckboxRow
 import com.maathisv.vigotrack.ui.components.SensorDataCard
 import com.maathisv.vigotrack.ui.components.SessionStatusCard
@@ -78,6 +80,8 @@ fun ActivitySessionScreen(
         (fromTable + fromStage).distinctBy { it.name }
     }
 
+    var editActivity by remember { mutableStateOf<ActivitySession?>(null) }
+
     val checkedSensorIds = remember { mutableStateMapOf<String, Boolean>() }
     var compactView by remember { mutableStateOf(false) }
 
@@ -102,7 +106,7 @@ fun ActivitySessionScreen(
         topBar = {
             AppTopBar(
                 title = if (activity?.isRunning == true) "En cours"
-                        else currentType?.let { ct -> allActivityTypes.find { it.name == ct.name }?.displayName ?: ct.displayName } ?: "Session",
+                        else activity?.customName ?: currentType?.let { ct -> allActivityTypes.find { it.name == ct.name }?.displayName ?: ct.displayName } ?: "Session",
                 onBack = onBack,
                 serverHealth = serverHealth
             )
@@ -125,7 +129,8 @@ fun ActivitySessionScreen(
                     SessionStatusCard(
                         activity = activity,
                         onMarkStale = { homeViewModel.markActivityAsStale(activityId) },
-                        onUnmarkStale = { homeViewModel.unmarkActivityAsStale(activityId) }
+                        onUnmarkStale = { homeViewModel.unmarkActivityAsStale(activityId) },
+                        onEdit = { editActivity = it }
                     )
                 }
 
@@ -251,5 +256,17 @@ fun ActivitySessionScreen(
                 }
             }
         }
+    }
+
+    editActivity?.let { activity ->
+        EditActivityDialog(
+            activity = activity,
+            onDismiss = { editActivity = null },
+            onConfirm = { name, date ->
+                homeViewModel.updateActivityName(activity.id, name)
+                homeViewModel.updateActivityDate(activity.id, date)
+                editActivity = null
+            }
+        )
     }
 }

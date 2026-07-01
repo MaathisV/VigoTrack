@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "patients": [
+    { "name": "Jean Dupont" },
+    { "name": "Marie Martin" }
+  ],
+  "stages": [
+    {
+      "name": "Phase 1 - Post-op",
+      "startDate": "2025-01-15",
+      "endDate": "2025-03-15",
+      "activities": [
+        {
+          "type": "MARCHE",
+          "scheduledDate": "2025-02-01T09:00:00",
+          "links": [
+            {
+              "patientName": "Jean Dupont",
+              "sensorId": "",
+              "features": ["HR", "PPI", "ACC"]
+            }
+          ]
+        },
+        {
+          "type": "HIIT",
+          "typeDisplayName": "HIIT adapté",
+          "scheduledDate": "2025-02-03T14:00:00",
+          "links": [
+            {
+              "patientName": "Jean Dupont",
+              "sensorId": "",
+              "features": ["HR", "ECG"]
+            }
+          ]
+        }
+      ],
+      "bilans": [
+        {
+          "type": "TDM6",
+          "scheduledDate": "2025-02-15T10:00:00",
+          "links": [
+            {
+              "patientName": "Jean Dupont",
+              "sensorId": "",
+              "features": ["HR", "PPI"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Phase 2 - Renforcement",
+      "startDate": "2025-03-16",
+      "endDate": "2025-05-30",
+      "activities": [
+        {
+          "type": "RENFORCEMENT",
+          "scheduledDate": "2025-03-20T08:00:00",
+          "links": [
+            {
+              "patientName": "Marie Martin",
+              "sensorId": "",
+              "features": ["HR", "ACC"]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

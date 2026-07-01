@@ -12,7 +12,8 @@ data class ActivitySession(
     val accumulatedTimeMs: Long = 0,
     val isRunning: Boolean = false,
     val stageId: Long? = null,
-    val isStale: Boolean = false
+    val isStale: Boolean = false,
+    val customName: String? = null
 ) {
     // Determine status based on flags
     val status: ActivityStatus
